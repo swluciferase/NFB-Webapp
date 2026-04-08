@@ -541,7 +541,7 @@ function App() {
         );
 
       case 'training':
-        return <TrainingView />;
+        return <TrainingView packets={latestPackets} filterParams={filterParams} />;
 
       default:
         return null;

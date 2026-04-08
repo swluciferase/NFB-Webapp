@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState, useCallback, type FC, type ChangeEvent } from 'react';
+import type { EegPacket, FilterParams } from '../../types/eeg';
+import { CHANNEL_LABELS } from '../../types/eeg';
+import { useBandPower, NFB_BANDS } from '../../hooks/useBandPower';
+import { DEFAULT_FILTER_PARAMS } from '../../types/eeg';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type Channel = 'Fp1' | 'Fp2' | 'F3' | 'F4' | 'C3' | 'C4' | 'P3' | 'P4';
+// Channel type matches actual hardware channel labels
+type Channel = typeof CHANNEL_LABELS[number];
 type Band = 'Delta' | 'Theta' | 'Alpha' | 'SMR' | 'Beta' | 'Hi-Beta' | 'Gamma';
 type Direction = 'up' | 'down';
 type OscWaveform = 'sine' | 'square' | 'triangle' | 'sawtooth';
 type BnbMethod = 'global-ssb' | 'band-shift' | 'sub-layer';
 type ModTrend = 'up' | 'down' | 'random';
 
-const CHANNELS: Channel[] = ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'P3', 'P4'];
+// Hardware channels: Fp1 Fp2 T7 T8 O1 O2 Fz Pz
+const CHANNELS: Channel[] = [...CHANNEL_LABELS];
 const BANDS: Band[] = ['Delta', 'Theta', 'Alpha', 'SMR', 'Beta', 'Hi-Beta', 'Gamma'];
 
 const BAND_BASE: Record<Band, number> = {
@@ -125,12 +131,13 @@ const threshBtnStyle: React.CSSProperties = {
 
 const EegCard: FC<{
   indicator: EegIndicator;
+  isLive: boolean;          // true = real EEG data; false = simulation
   onToggle: (id: number) => void;
   onChannelChange: (id: number, ch: Channel) => void;
   onBandChange: (id: number, b: Band) => void;
   onDirectionChange: (id: number, d: Direction) => void;
   onThresholdChange: (id: number, delta: number) => void;
-}> = ({ indicator, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange }) => {
+}> = ({ indicator, isLive, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange }) => {
   const aboveThreshold = indicator.value >= indicator.threshold;
   const selectStyle: React.CSSProperties = {
     background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5,
@@ -139,7 +146,12 @@ const EegCard: FC<{
   return (
     <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, opacity: indicator.enabled ? 1 : 0.55 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>EEG #{indicator.id}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>EEG #{indicator.id}</span>
+          {isLive
+            ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
+            : <Badge label="SIM" color="rgba(130,150,180,0.7)" bg="rgba(93,109,134,0.12)" />}
+        </div>
         <button onClick={() => onToggle(indicator.id)} style={{ background: indicator.enabled ? 'rgba(63,185,80,0.2)' : 'rgba(100,115,135,0.2)', border: `1px solid ${indicator.enabled ? 'rgba(63,185,80,0.5)' : 'rgba(100,115,135,0.4)'}`, borderRadius: 5, color: indicator.enabled ? '#3fb950' : '#6b7580', fontSize: 11, fontWeight: 600, padding: '2px 8px', cursor: 'pointer' }}>
           {indicator.enabled ? 'ON' : 'OFF'}
         </button>
@@ -160,8 +172,8 @@ const EegCard: FC<{
         ))}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>
-          {indicator.value.toFixed(1)} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>μV²</span>
+        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : '#dce9f8', fontWeight: 600 }}>
+          {indicator.value.toFixed(2)} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>μV²</span>
         </span>
         <Badge label={aboveThreshold ? (indicator.direction === 'up' ? 'ON' : 'OFF') : (indicator.direction === 'up' ? 'OFF' : 'ON')} color={aboveThreshold ? '#3fb950' : '#f85149'} bg={aboveThreshold ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
@@ -510,7 +522,16 @@ function makeDefaultIndicators(): EegIndicator[] {
   }));
 }
 
-export const TrainingView: FC = () => {
+export interface TrainingViewProps {
+  packets?: EegPacket[];
+  filterParams?: FilterParams;
+}
+
+export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) => {
+  // Live band power from EEG stream (null = not connected yet)
+  const liveBandPower = useBandPower(packets, filterParams ?? DEFAULT_FILTER_PARAMS);
+  const isConnected = packets !== undefined && packets.length > 0;
+
   const [indicators, setIndicators] = useState<EegIndicator[]>(makeDefaultIndicators);
   const [cardiac, setCardiac] = useState<CardiacState>({
     lfValue: 0.8, hfValue: 0.65, lfHfRatio: 1.2,
@@ -545,15 +566,30 @@ export const TrainingView: FC = () => {
     sendToFeedbackWindow({ type: 'nfb_overlay', opacity: 1 - opacityPct / 100 });
   }, [sendToFeedbackWindow]);
 
+  // Lookup helpers for live band power
+  const getLiveBandPower = useCallback((channel: Channel, band: Band): number | null => {
+    if (!liveBandPower) return null;
+    const chIdx = CHANNEL_LABELS.indexOf(channel as typeof CHANNEL_LABELS[number]);
+    const bandIdx = NFB_BANDS.findIndex(b => b.name === band);
+    if (chIdx < 0 || bandIdx < 0) return null;
+    return liveBandPower[chIdx]?.[bandIdx] ?? null;
+  }, [liveBandPower]);
+
   // ── Simulation tick ──
   const tick = useCallback(() => {
     const speed = simSpeed;
 
-    // EEG
+    // EEG — use live data when connected, otherwise simulate
     setIndicators(prev => prev.map(ind => {
       if (!ind.enabled) return ind;
-      const base = BAND_BASE[ind.band];
-      const newVal = randomDrift(ind.value, base, speed);
+      const live = getLiveBandPower(ind.channel, ind.band);
+      let newVal: number;
+      if (live !== null && live > 0) {
+        newVal = live;
+      } else {
+        const base = BAND_BASE[ind.band];
+        newVal = randomDrift(ind.value, base, speed);
+      }
       return { ...ind, value: newVal, history: [...ind.history, newVal].slice(-HISTORY_LEN) };
     }));
 
@@ -684,7 +720,7 @@ export const TrainingView: FC = () => {
       <div style={colStyle}>
         <div style={sectionHeaderStyle}>EEG NFB #1 #3 #5</div>
         {oddIndicators.map(ind => (
-          <EegCard key={ind.id} indicator={ind}
+          <EegCard key={ind.id} indicator={ind} isLive={isConnected && liveBandPower !== null}
             onToggle={id => setIndicators(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i))}
             onChannelChange={(id, ch) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch } : i))}
             onBandChange={(id, b) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, band: b, threshold: BAND_BASE[b] * 1.2 } : i))}
@@ -704,7 +740,7 @@ export const TrainingView: FC = () => {
       <div style={colStyle}>
         <div style={sectionHeaderStyle}>EEG NFB #2 #4 + Cardiac</div>
         {evenIndicators.map(ind => (
-          <EegCard key={ind.id} indicator={ind}
+          <EegCard key={ind.id} indicator={ind} isLive={isConnected && liveBandPower !== null}
             onToggle={id => setIndicators(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i))}
             onChannelChange={(id, ch) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch } : i))}
             onBandChange={(id, b) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, band: b, threshold: BAND_BASE[b] * 1.2 } : i))}

@@ -1,0 +1,6 @@
+{
+  "name": "nfb-webapp",
+  "version": "0.1.0",
+  "description": "Neurofeedback Web App integrating VisioMynd, ViboMynd, and SigmaCog EEG",
+  "private": true
+}

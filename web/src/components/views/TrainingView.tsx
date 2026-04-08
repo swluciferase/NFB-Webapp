@@ -192,9 +192,13 @@ const EegCard: FC<{
 // Cardiac card — badge fixed to VisioMynd
 const CardiacCard: FC<{
   state: CardiacState;
+  isLive: boolean;
+  liveHr: number | null;
+  liveBreathing: number | null;
   onDirectionChange: (d: Direction) => void;
   onThresholdChange: (delta: number) => void;
-}> = ({ state, onDirectionChange, onThresholdChange }) => {
+  onOpenVisioMynd: () => void;
+}> = ({ state, isLive, liveHr, liveBreathing, onDirectionChange, onThresholdChange, onOpenVisioMynd }) => {
   const ratio = state.lfHfRatio;
   const aboveThreshold = ratio >= state.threshold;
   const met = aboveThreshold === (state.direction === 'up');
@@ -202,8 +206,29 @@ const CardiacCard: FC<{
     <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.3)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>Cardiac</span>
-        <Badge label="VisioMynd LF/HF" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          {isLive
+            ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
+            : <Badge label="SIM" color="rgba(130,150,180,0.7)" bg="rgba(93,109,134,0.12)" />}
+          <Badge label="VisioMynd LF/HF" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
+        </div>
       </div>
+      {isLive && (liveHr !== null || liveBreathing !== null) && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
+          {liveHr !== null && (
+            <div>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>HR</span>
+              <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveHr} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>bpm</span></div>
+            </div>
+          )}
+          {liveBreathing !== null && (
+            <div>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>呼吸</span>
+              <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveBreathing} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>/min</span></div>
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
         {([['LF', state.lfValue], ['HF', state.hfValue]] as [string, number][]).map(([k, v]) => (
           <div key={k}>
@@ -231,7 +256,10 @@ const CardiacCard: FC<{
         <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'rgba(248,129,74,0.9)', fontFamily: 'ui-monospace,monospace' }}>{state.threshold.toFixed(1)}</span>
         <button onClick={() => onThresholdChange(0.1)} style={threshBtnStyle}>+</button>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button onClick={onOpenVisioMynd} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: '1px solid rgba(88,166,255,0.4)', background: 'rgba(88,166,255,0.1)', color: '#8ecfff', cursor: 'pointer' }}>
+          🔗 Open VisioMynd
+        </button>
         <Badge label={met ? '達標' : '未達標'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
     </div>
@@ -539,6 +567,41 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
   });
   const [bnb, setBnb] = useState<BnbState>(DEFAULT_BNB);
 
+  // VisioMynd live cardiac data (received via postMessage from rppg-webapp child window)
+  const [visioMyndLive, setVisioMyndLive] = useState(false);
+  const [visioMyndHr, setVisioMyndHr] = useState<number | null>(null);
+  const [visioMyndBreathing, setVisioMyndBreathing] = useState<number | null>(null);
+  const [visioMyndLfhf, setVisioMyndLfhf] = useState<number | null>(null);
+  const visioMyndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (!e.data || e.data.type !== 'visiomynd_data') return;
+      const { hr, breathing, lfhf } = e.data as { hr: number | null; breathing: number | null; lfhf: number | null };
+      setVisioMyndHr(hr ?? null);
+      setVisioMyndBreathing(breathing ?? null);
+      setVisioMyndLfhf(lfhf ?? null);
+      setVisioMyndLive(true);
+      // Reset live flag if no message for 5 s
+      if (visioMyndTimeoutRef.current) clearTimeout(visioMyndTimeoutRef.current);
+      visioMyndTimeoutRef.current = setTimeout(() => setVisioMyndLive(false), 5000);
+    };
+    window.addEventListener('message', handler);
+    return () => {
+      window.removeEventListener('message', handler);
+      if (visioMyndTimeoutRef.current) clearTimeout(visioMyndTimeoutRef.current);
+    };
+  }, []);
+
+  const visioMyndWindowRef = useRef<Window | null>(null);
+  const handleOpenVisioMynd = useCallback(() => {
+    if (visioMyndWindowRef.current && !visioMyndWindowRef.current.closed) {
+      visioMyndWindowRef.current.focus();
+      return;
+    }
+    visioMyndWindowRef.current = window.open('https://visiomynd.sigmacog.xyz', 'visiomynd_window', 'width=1280,height=800,resizable=yes');
+  }, []);
+
   // Session
   const [sessionRunning, setSessionRunning] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
@@ -593,8 +656,16 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
       return { ...ind, value: newVal, history: [...ind.history, newVal].slice(-HISTORY_LEN) };
     }));
 
-    // Cardiac (always simulate)
+    // Cardiac — use live VisioMynd data when available, otherwise simulate
     setCardiac(c => {
+      if (visioMyndLive && visioMyndLfhf !== null) {
+        const next = visioMyndLfhf;
+        return {
+          ...c, lfHfRatio: next,
+          lfValue: next * 0.7 + 0.1, hfValue: Math.max(0.05, 0.7 - next * 0.05 + 0.1),
+          history: [...c.history, next].slice(-HISTORY_LEN),
+        };
+      }
       const next = Math.max(0.3, Math.min(4, c.lfHfRatio + (Math.random() - 0.5) * 0.15 * speed));
       return {
         ...c, lfHfRatio: next,
@@ -635,7 +706,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
         return current;
       });
     }
-  }, [simSpeed, sessionRunning, sessionDuration, sendToFeedbackWindow]);
+  }, [simSpeed, sessionRunning, sessionDuration, sendToFeedbackWindow, visioMyndLive, visioMyndLfhf]);
 
   useEffect(() => {
     const interval = setInterval(tick, Math.round(1000 / simSpeed));
@@ -750,8 +821,12 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
         ))}
         <CardiacCard
           state={cardiac}
+          isLive={visioMyndLive}
+          liveHr={visioMyndHr}
+          liveBreathing={visioMyndBreathing}
           onDirectionChange={d => setCardiac(c => ({ ...c, direction: d }))}
           onThresholdChange={delta => setCardiac(c => ({ ...c, threshold: Math.max(0.1, c.threshold + delta) }))}
+          onOpenVisioMynd={handleOpenVisioMynd}
         />
       </div>
 

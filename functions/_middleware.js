@@ -1,12 +1,11 @@
 /**
- * Cloudflare Pages middleware.
- * - soramynd.sigmacog.xyz/* → redirect to www.sigmacog.xyz/soramynd/
- * - All other hosts (nfb-webapp.pages.dev, etc.) → pass through.
+ * Cloudflare Pages middleware — block direct access.
+ * Only requests forwarded by the artisebio-web proxy (carrying x-proxy-secret) are allowed.
  */
-export async function onRequest({ request, next }) {
-  const host = new URL(request.url).hostname;
-  if (host === 'soramynd.sigmacog.xyz') {
-    return Response.redirect('https://www.sigmacog.xyz/soramynd/', 301);
+export async function onRequest({ request, env, next }) {
+  const secret = env.PROXY_SECRET;
+  if (secret && request.headers.get('x-proxy-secret') !== secret) {
+    return new Response('Access denied', { status: 403 });
   }
   return next();
 }

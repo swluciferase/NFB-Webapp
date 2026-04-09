@@ -586,6 +586,7 @@ function App() {
               packets={latestPackets}
               filterParams={filterParams}
               hidden={activeTab !== 'training'}
+              lang={lang}
             />
           )}
           {activeTab !== 'training' && renderContent()}

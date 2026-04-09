@@ -3,6 +3,7 @@ import type { EegPacket, FilterParams } from '../../types/eeg';
 import { CHANNEL_LABELS } from '../../types/eeg';
 import { useBandPower, NFB_BANDS } from '../../hooks/useBandPower';
 import { DEFAULT_FILTER_PARAMS } from '../../types/eeg';
+import { T, LangContext, useLang, type Lang } from '../../i18n';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -20,82 +21,82 @@ const BAND_BASE: Record<Band, number> = {
   Delta: 18, Theta: 22, Alpha: 28, SMR: 14, Beta: 12, 'Hi-Beta': 8, Gamma: 6,
 };
 
-const BNB_METHOD_DESC: Record<BnbMethod, string> = {
-  'global-ssb': 'Single-sideband: both channels share one carrier, beat encoded as phase offset.',
-  'band-shift': 'Each channel plays at base ± (beat/2) Hz for a pure frequency difference.',
-  'sub-layer': 'Carrier hidden below audible range; beat modulates amplitude envelope.',
+const BNB_METHOD_DESC: Record<BnbMethod, Record<Lang, string>> = {
+  'global-ssb': { zh: '單邊帶調制法：兩聲道共用一個載波，以相位差編碼差頻。', en: 'Single-sideband: both channels share one carrier, beat encoded as phase offset.' },
+  'band-shift': { zh: '每聲道分別以 base ± (beat/2) Hz 播放，產生純頻率差。', en: 'Each channel plays at base ± (beat/2) Hz for a pure frequency difference.' },
+  'sub-layer':  { zh: '載波隱藏於可聽域以下；差頻以振幅包絡進行調製。', en: 'Carrier hidden below audible range; beat modulates amplitude envelope.' },
 };
 
 interface PresetOption {
   value: string;
-  label: string;
-  info: string;
+  label: { zh: string; en: string };
+  info: { zh: string; en: string };
   formula: string;
   direction: Direction;
 }
 
 const PRESET_OPTIONS: PresetOption[] = [
-  { value: '', label: '— 選擇預設 —', info: '', formula: '', direction: 'up' },
+  { value: '', label: { zh: '— 選擇預設 —', en: '— Select Preset —' }, info: { zh: '', en: '' }, formula: '', direction: 'up' },
   {
     value: 'tbr',
-    label: '① 注意力提升 (TBR)（Fz）',
-    info: '這是 ADHD 訓練最常用的指標，值越高代表專注度越高。\n算式：Fz_Beta / Fz_Theta',
+    label: { zh: '① 注意力提升 (TBR)（Fz）', en: '① Attention (TBR) (Fz)' },
+    info: { zh: '這是 ADHD 訓練最常用的指標，值越高代表專注度越高。\n算式：Fz_Beta / Fz_Theta', en: 'Most common ADHD training index. Higher = more focused.\nFormula: Fz_Beta / (Fz_Theta + 0.001)' },
     formula: 'Fz_Beta / (Fz_Theta + 0.001)',
     direction: 'up',
   },
   {
     value: 'alpha_relax',
-    label: '② 深度放鬆 (Alpha)（O1, O2）',
-    info: '閉眼訓練效果最佳，數值越高代表大腦進入節能放鬆狀態。\n算式：(O1_Alpha + O2_Alpha) / 2',
+    label: { zh: '② 深度放鬆 (Alpha)（O1, O2）', en: '② Deep Relaxation (Alpha) (O1, O2)' },
+    info: { zh: '閉眼訓練效果最佳，數值越高代表大腦進入節能放鬆狀態。\n算式：(O1_Alpha + O2_Alpha) / 2', en: 'Best with eyes closed. Higher = deeper relaxation.\nFormula: (O1_Alpha + O2_Alpha) / 2' },
     formula: '(O1_Alpha + O2_Alpha) / 2',
     direction: 'up',
   },
   {
     value: 'asymmetry',
-    label: '③ 情緒平衡 (Asymmetry)（Fp1/2, T7/8）',
-    info: '當右額葉 Alpha 高於左額葉，代表左腦較活躍，通常與正向情緒相關。\n算式：(Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)',
+    label: { zh: '③ 情緒平衡 (Asymmetry)（Fp1/2, T7/8）', en: '③ Emotional Balance (Asymmetry) (Fp1/2, T7/8)' },
+    info: { zh: '當右額葉 Alpha 高於左額葉，代表左腦較活躍，通常與正向情緒相關。\n算式：(Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)', en: 'Higher right-hemisphere Alpha = more positive affect.\nFormula: (Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)' },
     formula: '(Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)',
     direction: 'up',
   },
   {
     value: 'smr',
-    label: '④ 身心穩定 (SMR)（Fz）',
-    info: '提升運動覺節律，訓練在冷靜中保持警覺，適合緩解過動。\n算式：Fz_SMR',
+    label: { zh: '④ 身心穩定 (SMR)（Fz）', en: '④ Calm Alertness (SMR) (Fz)' },
+    info: { zh: '提升運動覺節律，訓練在冷靜中保持警覺，適合緩解過動。\n算式：Fz_SMR', en: 'Trains sensorimotor rhythm — calm yet alert, helps hyperactivity.\nFormula: Fz_SMR' },
     formula: 'Fz_SMR',
     direction: 'up',
   },
   {
     value: 'beta_logic',
-    label: '⑤ 邏輯執行力 (Beta)（Fp1, T7）',
-    info: '強化左額葉的認知處理能力，有助於邏輯運算與決策。\n算式：(Fp1_Beta + T7_Beta) / 2',
+    label: { zh: '⑤ 邏輯執行力 (Beta)（Fp1, T7）', en: '⑤ Logic & Executive (Beta) (Fp1, T7)' },
+    info: { zh: '強化左額葉的認知處理能力，有助於邏輯運算與決策。\n算式：(Fp1_Beta + T7_Beta) / 2', en: 'Strengthens left-frontal cognition for logic and decision-making.\nFormula: (Fp1_Beta + T7_Beta) / 2' },
     formula: '(Fp1_Beta + T7_Beta) / 2',
     direction: 'up',
   },
   {
     value: 'theta_alpha',
-    label: '⑥ 創造力/內省 (T/A)（Pz）',
-    info: '訓練進入 Theta 與 Alpha 的交界，常見於深度冥想或藝術創作訓練。\n算式：Pz_Theta / Pz_Alpha',
+    label: { zh: '⑥ 創造力/內省 (T/A)（Pz）', en: '⑥ Creativity / Insight (T/A) (Pz)' },
+    info: { zh: '訓練進入 Theta 與 Alpha 的交界，常見於深度冥想或藝術創作訓練。\n算式：Pz_Theta / Pz_Alpha', en: 'Theta-Alpha boundary — associated with deep meditation or creative flow.\nFormula: Pz_Theta / (Pz_Alpha + 0.001)' },
     formula: 'Pz_Theta / (Pz_Alpha + 0.001)',
     direction: 'up',
   },
   {
     value: 'gamma',
-    label: '⑦ 認知統合 (Gamma)（Fp1, Fp2）',
-    info: '針對高階訊息整合與領悟力提升，訓練大腦的高頻同步。\n算式：(Fp1_Gamma + Fp2_Gamma) / 2',
+    label: { zh: '⑦ 認知統合 (Gamma)（Fp1, Fp2）', en: '⑦ Cognitive Integration (Gamma) (Fp1, Fp2)' },
+    info: { zh: '針對高階訊息整合與領悟力提升，訓練大腦的高頻同步。\n算式：(Fp1_Gamma + Fp2_Gamma) / 2', en: 'High-frequency synchrony for insight and information integration.\nFormula: (Fp1_Gamma + Fp2_Gamma) / 2' },
     formula: '(Fp1_Gamma + Fp2_Gamma) / 2',
     direction: 'up',
   },
   {
     value: 'hibeta_anx',
-    label: '⑧ 焦慮控制 (High-Beta)（T7, Pz, T8）',
-    info: '抑制後頂葉的高頻 Beta 波 (20-30Hz)，數值越高代表越不焦慮。\n算式：4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)',
+    label: { zh: '⑧ 焦慮控制 (High-Beta)（T7, Pz, T8）', en: '⑧ Anxiety Control (High-Beta) (T7, Pz, T8)' },
+    info: { zh: '抑制後頂葉的高頻 Beta 波 (20-30Hz)，數值越高代表越不焦慮。\n算式：4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)', en: 'Suppresses posterior high-Beta (20-30 Hz). Higher = less anxious.\nFormula: 4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)' },
     formula: '4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)',
     direction: 'up',
   },
   {
     value: 'fm_theta',
-    label: '⑨ 心流狀態 (Fm-Theta)（Fz）',
-    info: '針對前額葉正中 Theta 波，數值越高代表在複雜任務中的專注流動感越強。\n算式：Fz_Theta',
+    label: { zh: '⑨ 心流狀態 (Fm-Theta)（Fz）', en: '⑨ Flow State (Fm-Theta) (Fz)' },
+    info: { zh: '針對前額葉正中 Theta 波，數值越高代表在複雜任務中的專注流動感越強。\n算式：Fz_Theta', en: 'Frontal midline Theta — higher = stronger focus-flow in complex tasks.\nFormula: Fz_Theta' },
     formula: 'Fz_Theta',
     direction: 'up',
   },
@@ -134,6 +135,15 @@ const Badge: FC<{ label: string; color: string; bg: string }> = ({ label, color,
     fontSize: 11, fontWeight: 600, color, background: bg, letterSpacing: '0.03em',
   }}>{label}</span>
 );
+
+const DragThreshHint: FC = () => {
+  const lang = useLang();
+  return (
+    <div style={{ fontSize: 10, color: 'rgba(248,129,74,0.55)', textAlign: 'center', marginTop: 2, userSelect: 'none' }}>
+      {T(lang, 'trainDragThresh')}
+    </div>
+  );
+};
 
 // ── HistCanvas — fills container width, drag Y to adjust threshold ──────────
 
@@ -222,9 +232,7 @@ const HistCanvas: FC<{
         onPointerLeave={handlePointerUp}
       />
       {onThresholdChange && (
-        <div style={{ fontSize: 10, color: 'rgba(248,129,74,0.55)', textAlign: 'center', marginTop: 2, userSelect: 'none' }}>
-          ↕ 拖曳調整 threshold
-        </div>
+        <DragThreshHint />
       )}
     </div>
   );
@@ -270,6 +278,7 @@ const EegCard: FC<{
   onAutoThresholdToggle: (id: number) => void;
   onPresetApply: (id: number, presetKey: string, formula: string, direction: Direction) => void;
 }> = ({ indicator, isLive, liveBandPower, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onPresetApply }) => {
+  const lang = useLang();
   const aboveThreshold = indicator.value >= indicator.threshold;
   const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
   const activePreset = PRESET_OPTIONS.find(p => p.value === indicator.presetKey) ?? null;
@@ -282,7 +291,7 @@ const EegCard: FC<{
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>EEG #{indicator.id}</span>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>{T(lang, 'trainEegCard')}{indicator.id}</span>
           {isLive
             ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
             : <Badge label="—" color="rgba(130,150,180,0.5)" bg="rgba(93,109,134,0.10)" />}
@@ -304,12 +313,12 @@ const EegCard: FC<{
           style={{ ...selectStyle, flex: 1, width: 'unset' }}
         >
           {PRESET_OPTIONS.map(p => (
-            <option key={p.value} value={p.value}>{p.label}</option>
+            <option key={p.value} value={p.value}>{p.label[lang]}</option>
           ))}
         </select>
         {activePreset && (
           <span
-            title={activePreset.info}
+            title={activePreset?.info[lang]}
             style={{
               width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
               background: 'rgba(88,166,255,0.15)', border: '1px solid rgba(88,166,255,0.4)',
@@ -343,7 +352,7 @@ const EegCard: FC<{
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
         {(['up', 'down'] as Direction[]).map(d => (
           <button key={d} onClick={() => onDirectionChange(indicator.id, d)} style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: `1px solid ${indicator.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.6)' : 'rgba(248,81,73,0.6)') : 'var(--border)'}`, background: indicator.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)') : 'var(--bg-tertiary)', color: indicator.direction === d ? (d === 'up' ? '#3fb950' : '#f85149') : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-            {d === 'up' ? '↑ Up' : '↓ Down'}
+            {d === 'up' ? T(lang, 'trainDirUp') : T(lang, 'trainDirDown')}
           </button>
         ))}
       </div>
@@ -386,7 +395,7 @@ const EegCard: FC<{
             cursor: 'pointer',
           }}
         >
-          AUTO
+          {T(lang, 'trainAuto')}
         </button>
       </div>
     </div>
@@ -440,6 +449,7 @@ const FormulaCard: FC<{
   onAutoThresholdToggle: (id: number) => void;
   onDirectionChange: (id: number, d: Direction) => void;
 }> = ({ indicator, isLive, liveBandPower, onToggle, onFormulaChange, onThresholdChange, onAutoThresholdToggle, onDirectionChange }) => {
+  const lang = useLang();
   const computedValue = isLive ? (evalFormula(indicator.formula, liveBandPower) ?? 0) : 0;
   const aboveThreshold = computedValue >= indicator.threshold;
   const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
@@ -448,7 +458,7 @@ const FormulaCard: FC<{
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>EEG #5 <span style={{ color: 'rgba(88,166,255,0.6)', fontWeight: 400, fontSize: 11 }}>自定義指標</span></span>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>{T(lang, 'trainEegCard')}5 <span style={{ color: 'rgba(88,166,255,0.6)', fontWeight: 400, fontSize: 11 }}>{T(lang, 'trainCustomIdx')}</span></span>
           {isLive
             ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
             : <Badge label="—" color="rgba(130,150,180,0.5)" bg="rgba(93,109,134,0.10)" />}
@@ -461,13 +471,13 @@ const FormulaCard: FC<{
       {/* Formula input */}
       <div style={{ marginBottom: 8 }}>
         <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>
-          公式 (e.g. <code style={{ color: 'rgba(88,166,255,0.7)' }}>Fp1_Alpha / (Fp1_Alpha + Fp2_Theta)</code>)
+          {T(lang, 'trainFormulaLabel')} (e.g. <code style={{ color: 'rgba(88,166,255,0.7)' }}>Fp1_Alpha / (Fp1_Alpha + Fp2_Theta)</code>)
         </div>
         <input
           type="text"
           value={indicator.formula}
           onChange={e => onFormulaChange(indicator.id, e.target.value)}
-          placeholder="輸入公式…"
+          placeholder={T(lang, 'trainFormulaPlaceholder')}
           style={{
             width: '100%', boxSizing: 'border-box',
             background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
@@ -476,7 +486,7 @@ const FormulaCard: FC<{
           }}
         />
         <div style={{ fontSize: 10, color: 'rgba(93,109,134,0.6)', marginTop: 3 }}>
-          頻道: Fp1 Fp2 T7 T8 O1 O2 Fz Pz &nbsp;·&nbsp; 頻帶: Delta Theta Alpha SMR Beta HiBeta Gamma
+          {T(lang, 'trainFormulaHint')}
         </div>
       </div>
 
@@ -484,7 +494,7 @@ const FormulaCard: FC<{
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
         {(['up', 'down'] as Direction[]).map(d => (
           <button key={d} onClick={() => onDirectionChange(indicator.id, d)} style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: `1px solid ${indicator.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.6)' : 'rgba(248,81,73,0.6)') : 'var(--border)'}`, background: indicator.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)') : 'var(--bg-tertiary)', color: indicator.direction === d ? (d === 'up' ? '#3fb950' : '#f85149') : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-            {d === 'up' ? '↑ Up' : '↓ Down'}
+            {d === 'up' ? T(lang, 'trainDirUp') : T(lang, 'trainDirDown')}
           </button>
         ))}
       </div>
@@ -527,7 +537,7 @@ const FormulaCard: FC<{
             cursor: 'pointer',
           }}
         >
-          AUTO
+          {T(lang, 'trainAuto')}
         </button>
       </div>
     </div>
@@ -546,6 +556,7 @@ const CardiacCard: FC<{
   onAutoThresholdToggle: () => void;
   onOpenVisioMynd: () => void;
 }> = ({ state, isLive, liveHr, liveBreathing, onToggle, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onOpenVisioMynd }) => {
+  const lang = useLang();
   const ratio = state.lfHfRatio;
   const aboveThreshold = ratio >= state.threshold;
   const met = aboveThreshold === (state.direction === 'up');
@@ -566,7 +577,7 @@ const CardiacCard: FC<{
       {isLive && (liveHr !== null || liveBreathing !== null) && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
           {liveHr !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>HR</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveHr} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>bpm</span></div></div>}
-          {liveBreathing !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>呼吸</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveBreathing} <span style={{ fontSize: 11 }}>/min</span></div></div>}
+          {liveBreathing !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{T(lang, 'trainBreathing')}</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveBreathing} <span style={{ fontSize: 11 }}>/min</span></div></div>}
         </div>
       )}
       <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
@@ -581,7 +592,7 @@ const CardiacCard: FC<{
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
         {(['up', 'down'] as Direction[]).map(d => (
           <button key={d} onClick={() => onDirectionChange(d)} style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: `1px solid ${state.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.6)' : 'rgba(248,81,73,0.6)') : 'var(--border)'}`, background: state.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)') : 'var(--bg-tertiary)', color: state.direction === d ? (d === 'up' ? '#3fb950' : '#f85149') : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-            {d === 'up' ? '↑ Up' : '↓ Down'}
+            {d === 'up' ? T(lang, 'trainDirUp') : T(lang, 'trainDirDown')}
           </button>
         ))}
       </div>
@@ -589,7 +600,7 @@ const CardiacCard: FC<{
         <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
           {isLive ? ratio.toFixed(2) : '—'}
         </span>
-        <Badge label={met ? '達標' : '未達標'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
+        <Badge label={met ? T(lang, 'trainMet') : T(lang, 'trainNotMet')} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
       <div style={{ marginBottom: 4 }}>
         <HistCanvas
@@ -612,12 +623,12 @@ const CardiacCard: FC<{
           onClick={onAutoThresholdToggle}
           style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, border: `1px solid ${state.autoThreshold ? 'rgba(88,166,255,0.5)' : 'rgba(93,109,134,0.4)'}`, background: state.autoThreshold ? 'rgba(88,166,255,0.15)' : 'var(--bg-tertiary)', color: state.autoThreshold ? '#58a6ff' : 'var(--text-secondary)', cursor: 'pointer' }}
         >
-          AUTO
+          {T(lang, 'trainAuto')}
         </button>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button onClick={onOpenVisioMynd} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: '1px solid rgba(88,166,255,0.4)', background: 'rgba(88,166,255,0.1)', color: '#8ecfff', cursor: 'pointer' }}>
-          🔗 Open VisioMynd
+          {T(lang, 'trainOpenVisioMynd')}
         </button>
       </div>
     </div>
@@ -628,7 +639,7 @@ const CardiacCard: FC<{
 
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
-const ProgressGauge: FC<{ score: number }> = ({ score }) => {
+const ProgressGauge: FC<{ score: number; lang: Lang }> = ({ score, lang }) => {
   const r = 52; const cx = 70; const cy = 70;
   const circ = 2 * Math.PI * r;
   const filled = circ * (score / 100);
@@ -641,7 +652,7 @@ const ProgressGauge: FC<{ score: number }> = ({ score }) => {
           strokeDasharray={`${filled} ${circ - filled}`} strokeDashoffset={circ / 4}
           strokeLinecap="round" style={{ transition: 'stroke-dasharray 0.5s ease, stroke 0.5s ease' }} />
         <text x={cx} y={cy + 6} textAnchor="middle" style={{ fill: '#dce9f8', fontSize: 24, fontWeight: 700, fontFamily: 'ui-monospace,monospace' }}>{score}%</text>
-        <text x={cx} y={cy + 22} textAnchor="middle" style={{ fill: 'var(--text-secondary)', fontSize: 11 }}>Overall</text>
+        <text x={cx} y={cy + 22} textAnchor="middle" style={{ fill: 'var(--text-secondary)', fontSize: 11 }}>{T(lang, 'trainOverall')}</text>
       </svg>
     </div>
   );
@@ -713,6 +724,7 @@ const labelStyle: React.CSSProperties = { fontSize: 11, color: 'var(--text-secon
 const subHeaderStyle: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '10px 0 6px', borderBottom: '1px solid rgba(93,109,134,0.2)', paddingBottom: 3 };
 
 const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => void; onAudioBlob?: (blobUrl: string, name: string) => void }> = ({ bnb, onChange, onAudioBlob }) => {
+  const lang = useLang();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -841,7 +853,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
   return (
     <div style={{ flex: 1, padding: '4px 2px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span style={{ fontWeight: 700, fontSize: 14, color: '#8ecfff' }}>BNB Controls</span>
+        <span style={{ fontWeight: 700, fontSize: 14, color: '#8ecfff' }}>{T(lang, 'trainBnbTitle')}</span>
         <Badge label="Binaural Beat" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
       </div>
 
@@ -860,7 +872,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
           }}
         >
           <div style={{ fontSize: 11, color: bnb.audioFileName ? '#58a6ff' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
-            {bnb.audioFileName || '+ Audio File'}
+            {bnb.audioFileName || T(lang, 'trainAudioFile')}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
@@ -886,7 +898,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
           style={{ width: '100%', accentColor: '#58a6ff' }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Vol</span>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{T(lang, 'trainVol')}</span>
         <input type="range" min={0} max={100} value={bnb.volume}
           onChange={e => onChange({ volume: parseInt(e.target.value) })}
           style={{ flex: 1, accentColor: '#3fb950' }} />
@@ -894,31 +906,31 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       </div>
 
       {/* Oscillator Source */}
-      <div style={subHeaderStyle as React.CSSProperties}>Oscillator Source</div>
+      <div style={subHeaderStyle as React.CSSProperties}>{T(lang, 'trainOscSource')}</div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, cursor: 'pointer' }}>
         <input type="checkbox" checked={bnb.oscEnabled} onChange={e => onChange({ oscEnabled: e.target.checked })} style={{ accentColor: '#58a6ff' }} />
-        <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Enable Oscillator</span>
+        <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{T(lang, 'trainEnableOsc')}</span>
       </label>
       <div style={{ opacity: bnb.oscEnabled ? 1 : 0.45, transition: 'opacity 0.15s' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
           <div>
-            <span style={labelStyle}>Waveform</span>
+            <span style={labelStyle}>{T(lang, 'trainWaveform')}</span>
             <select value={bnb.oscWaveform} onChange={e => onChange({ oscWaveform: e.target.value as OscWaveform })}
               style={{ ...inputStyle, padding: '3px 6px' }} disabled={!bnb.oscEnabled}>
               {(['sine', 'square', 'triangle', 'sawtooth', 'white-noise', 'ocean-waves'] as OscWaveform[]).map(w => (
-                <option key={w} value={w}>{w === 'white-noise' ? 'White Noise' : w === 'ocean-waves' ? 'Ocean Waves' : w.charAt(0).toUpperCase() + w.slice(1)}</option>
+                <option key={w} value={w}>{w === 'white-noise' ? T(lang, 'trainWhiteNoise') : w === 'ocean-waves' ? T(lang, 'trainOceanWaves') : w.charAt(0).toUpperCase() + w.slice(1)}</option>
               ))}
             </select>
           </div>
           <div>
-            <span style={labelStyle}>Freq (Hz)</span>
+            <span style={labelStyle}>{T(lang, 'trainFreqHz')}</span>
             <input type="number" min={20} max={20000} value={bnb.oscFreq}
               onChange={e => onChange({ oscFreq: parseFloat(e.target.value) || 440 })}
               style={inputStyle} disabled={!bnb.oscEnabled || bnb.oscWaveform === 'white-noise' || bnb.oscWaveform === 'ocean-waves'} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Osc Vol</span>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{T(lang, 'trainOscVol')}</span>
           <input type="range" min={0} max={100} value={bnb.oscVolume}
             onChange={e => onChange({ oscVolume: parseInt(e.target.value) })}
             style={{ flex: 1, accentColor: '#f9a02e' }} disabled={!bnb.oscEnabled} />
@@ -927,11 +939,11 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       </div>
 
       {/* Binaural Beat Frequency */}
-      <div style={subHeaderStyle as React.CSSProperties}>Binaural Beat Frequency</div>
+      <div style={subHeaderStyle as React.CSSProperties}>{T(lang, 'trainBbFreq')}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', flex: 1 }}>
           <input type="checkbox" checked={bnb.bbFixed} onChange={e => onChange({ bbFixed: e.target.checked })} style={{ accentColor: '#58a6ff' }} />
-          <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Fixed Frequency</span>
+          <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{T(lang, 'trainFixedFreq')}</span>
         </label>
         {bnb.bbFixed && (
           <input type="number" min={0.5} max={100} step={0.5} value={bnb.bbCurrentHz}
@@ -954,7 +966,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         </div>
       </div>
       <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '7px 10px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Current Beat</span>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{T(lang, 'trainCurrentBeat')}</span>
         <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 16, fontWeight: 700, color: '#58a6ff' }}>{formatHz(bnb.bbCurrentHz)} Hz</span>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
@@ -967,7 +979,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       </div>
 
       {/* Binaural Method */}
-      <div style={subHeaderStyle as React.CSSProperties}>Binaural Method</div>
+      <div style={subHeaderStyle as React.CSSProperties}>{T(lang, 'trainBnbMethod')}</div>
       <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}>
         {([['global-ssb', 'Global SSB'], ['band-shift', 'Band-Shift'], ['sub-layer', 'Sub-Layer']] as [BnbMethod, string][]).map(([id, label]) => (
           <button key={id} onClick={() => onChange({ bnbMethod: id })}
@@ -977,25 +989,25 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         ))}
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, background: 'var(--bg-tertiary)', borderRadius: 6, padding: '7px 9px', marginBottom: 6 }}>
-        {BNB_METHOD_DESC[bnb.bnbMethod]}
+        {BNB_METHOD_DESC[bnb.bnbMethod][lang]}
       </div>
       {/* Method-specific sub-options */}
       {bnb.bnbMethod === 'band-shift' && (
         <>
-          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>Carrier Band</div>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>{T(lang, 'trainCarrierBand')}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
             {([
-              { label: '150–400', low: 150, high: 400, name: '標準建議' },
-              { label: '100–250', low: 100, high: 250, name: '低頻共鳴' },
-              { label: '200–600', low: 200, high: 600, name: '中頻核心' },
-              { label: '300–700', low: 300, high: 700, name: '高清晰度' },
-            ] as { label: string; low: number; high: number; name: string }[]).map(p => {
+              { label: '150–400', low: 150, high: 400, name: { zh: '標準建議', en: 'Standard' } },
+              { label: '100–250', low: 100, high: 250, name: { zh: '低頻共鳴', en: 'Low Resonance' } },
+              { label: '200–600', low: 200, high: 600, name: { zh: '中頻核心', en: 'Mid Core' } },
+              { label: '300–700', low: 300, high: 700, name: { zh: '高清晰度', en: 'High Clarity' } },
+            ] as { label: string; low: number; high: number; name: Record<Lang, string> }[]).map(p => {
               const active = bnb.bandLowHz === p.low && bnb.bandHighHz === p.high;
               return (
                 <button key={p.label}
                   onClick={() => onChange({ bandLowHz: p.low, bandHighHz: p.high, oscFreq: Math.round((p.low + p.high) / 2) })}
                   style={{ padding: '3px 8px', borderRadius: 5, border: `1px solid ${active ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: active ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: active ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  {p.label} <span style={{ fontSize: 10, opacity: 0.7 }}>({p.name})</span>
+                  {p.label} <span style={{ fontSize: 10, opacity: 0.7 }}>({p.name[lang]})</span>
                 </button>
               );
             })}
@@ -1004,20 +1016,20 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       )}
       {bnb.bnbMethod === 'sub-layer' && (
         <>
-          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>Carrier Freq</div>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>{T(lang, 'trainCarrierFreq')}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
             {([
-              { hz: 140, name: '驅動感' },
-              { hz: 200, name: '標準' },
-              { hz: 250, name: '清晰' },
-              { hz: 400, name: '最佳同步★' },
-            ] as { hz: number; name: string }[]).map(p => {
+              { hz: 140, name: { zh: '驅動感', en: 'Energetic' } },
+              { hz: 200, name: { zh: '標準', en: 'Standard' } },
+              { hz: 250, name: { zh: '清晰', en: 'Clear' } },
+              { hz: 400, name: { zh: '最佳同步★', en: 'Best Sync ★' } },
+            ] as { hz: number; name: Record<Lang, string> }[]).map(p => {
               const active = bnb.subLayerCarrierHz === p.hz;
               return (
                 <button key={p.hz}
                   onClick={() => onChange({ subLayerCarrierHz: p.hz, oscFreq: p.hz })}
                   style={{ padding: '3px 8px', borderRadius: 5, border: `1px solid ${active ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: active ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: active ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  {p.hz} Hz <span style={{ fontSize: 10, opacity: 0.7 }}>({p.name})</span>
+                  {p.hz} Hz <span style={{ fontSize: 10, opacity: 0.7 }}>({p.name[lang]})</span>
                 </button>
               );
             })}
@@ -1026,28 +1038,28 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       )}
 
       {/* Modulation */}
-      <div style={subHeaderStyle as React.CSSProperties}>Modulation</div>
+      <div style={subHeaderStyle as React.CSSProperties}>{T(lang, 'trainModulation')}</div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, cursor: 'pointer' }}>
         <input type="checkbox" checked={bnb.modEnabled} onChange={e => onChange({ modEnabled: e.target.checked })} style={{ accentColor: '#58a6ff' }} />
-        <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Enable Modulation</span>
+        <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{T(lang, 'trainEnableMod')}</span>
       </label>
       <div style={{ opacity: bnb.modEnabled ? 1 : 0.4, transition: 'opacity 0.15s' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
           <div>
-            <span style={labelStyle}>Interval (ms)</span>
+            <span style={labelStyle}>{T(lang, 'trainInterval')}</span>
             <input type="number" min={50} max={5000} step={50} value={bnb.modInterval}
               onChange={e => onChange({ modInterval: parseInt(e.target.value) || 500 })}
               style={inputStyle} disabled={!bnb.modEnabled} />
           </div>
           <div>
-            <span style={labelStyle}>Step (Hz)</span>
+            <span style={labelStyle}>{T(lang, 'trainStep')}</span>
             <input type="number" min={0.1} max={5} step={0.1} value={bnb.modStep}
               onChange={e => onChange({ modStep: parseFloat(e.target.value) || 0.5 })}
               style={inputStyle} disabled={!bnb.modEnabled} />
           </div>
         </div>
         <div>
-          <span style={labelStyle}>Trend</span>
+          <span style={labelStyle}>{T(lang, 'trainTrend')}</span>
           <div style={{ display: 'flex', gap: 6 }}>
             {(['up', 'down', 'loop'] as ModTrend[]).map(t => (
               <button key={t} onClick={() => onChange({ modTrend: t })} disabled={!bnb.modEnabled}
@@ -1068,11 +1080,17 @@ const HISTORY_LEN = 60;
 
 // 活躍度 (Activity): K constant for OO = K * sqrt(AT)
 const K_VALUES = [16.67, 14.29, 12.70, 11.55, 10.66] as const;
-const DIFFICULTY_LABELS = ['很容易', '容易', '中等', '困難', '很困難'] as const;
+const DIFFICULTY_LABELS: Record<Lang, readonly string[]> = {
+  zh: ['很容易', '容易', '中等', '困難', '很困難'],
+  en: ['Very Easy', 'Easy', 'Medium', 'Hard', 'Very Hard'],
+};
 
 // 持續度 (Persistence): moving-window size in seconds
 const W_VALUES = [5, 8, 12, 17, 23] as const;
-const PERSISTENCE_LABELS = ['5 秒', '8 秒', '12 秒', '17 秒', '23 秒'] as const;
+const PERSISTENCE_LABELS: Record<Lang, readonly string[]> = {
+  zh: ['5 秒', '8 秒', '12 秒', '17 秒', '23 秒'],
+  en: ['5 s', '8 s', '12 s', '17 s', '23 s'],
+};
 
 /** RMS of an array; returns 0 if empty */
 function computeRMS(values: number[]): number {
@@ -1100,9 +1118,10 @@ export interface TrainingViewProps {
   packets?: EegPacket[];
   filterParams?: FilterParams;
   hidden?: boolean;
+  lang?: Lang;
 }
 
-export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hidden }) => {
+export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hidden, lang }) => {
   const liveBandPower = useBandPower(packets, filterParams ?? DEFAULT_FILTER_PARAMS);
   // Ref for stale-closure-safe access inside tick
   const liveBandPowerRef = useRef(liveBandPower);
@@ -1478,7 +1497,13 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   }, []);
 
   const handleBaseline = useCallback(() => {
-    if (baselinePhase === 'recording') return;
+    if (baselinePhase === 'recording') {
+      baselinePhaseRef.current = 'idle';
+      setBaselinePhase('idle');
+      setBaselineProgress(0);
+      baselineRecordRef.current = [];
+      return;
+    }
     baselineRecordRef.current = [];
     setBaselineProgress(0);
     baselinePhaseRef.current = 'recording';
@@ -1561,6 +1586,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   };
 
   return (
+    <LangContext.Provider value={lang ?? 'zh'}>
     <div style={{ display: hidden ? 'none' : 'flex', gap: 16, height: '100%', overflow: 'hidden' }}>
 
       {/* ── Column 1: EEG odd (#1 #3 #5) ── */}
@@ -1612,13 +1638,13 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
         {/* Progress gauge + stats */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px', marginBottom: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <ProgressGauge score={overallScore} />
+            <ProgressGauge score={overallScore} lang={lang ?? 'zh'} />
             <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { label: 'Duration', value: formatDuration(sessionDuration) },
-                { label: 'Target Achievement', value: `${targetAchievementPct}%` },
-                { label: 'Reward Rate', value: `${rewardRate}%` },
-                { label: 'Overlay Opacity', value: `${overlayOpacity}%` },
+                { label: T(lang ?? 'zh', 'trainDuration'), value: formatDuration(sessionDuration) },
+                { label: T(lang ?? 'zh', 'trainTA'), value: `${targetAchievementPct}%` },
+                { label: T(lang ?? 'zh', 'trainRR'), value: `${rewardRate}%` },
+                { label: T(lang ?? 'zh', 'trainOO'), value: `${overlayOpacity}%` },
               ].map(item => (
                 <div key={item.label} style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '7px 10px', textAlign: 'center' }}>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>{item.label}</div>
@@ -1630,9 +1656,9 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           {/* 活躍度 slider */}
           <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '8px 10px', marginBottom: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>活躍度</span>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{T(lang ?? 'zh', 'trainActivityLevel')}</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#f9a02e', fontFamily: 'ui-monospace,monospace' }}>
-                Lv.{difficultyLevel} {DIFFICULTY_LABELS[difficultyLevel - 1]} &nbsp;
+                Lv.{difficultyLevel} {DIFFICULTY_LABELS[lang ?? 'zh'][difficultyLevel - 1]} &nbsp;
                 <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>TA={[36,49,62,75,88][difficultyLevel - 1]}%</span>
               </span>
             </div>
@@ -1640,15 +1666,15 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               onChange={e => setDifficultyLevel(parseInt(e.target.value))}
               style={{ width: '100%', accentColor: '#f9a02e' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
-              <span>最容易</span><span>最困難</span>
+              <span>{T(lang ?? 'zh', 'trainEasiest')}</span><span>{T(lang ?? 'zh', 'trainHardest')}</span>
             </div>
           </div>
           {/* 持續度 slider */}
           <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '8px 10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>持續度</span>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{T(lang ?? 'zh', 'trainPersistLevel')}</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#85e89d', fontFamily: 'ui-monospace,monospace' }}>
-                Lv.{persistenceLevel} {PERSISTENCE_LABELS[persistenceLevel - 1]} &nbsp;
+                Lv.{persistenceLevel} {PERSISTENCE_LABELS[lang ?? 'zh'][persistenceLevel - 1]} &nbsp;
                 <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>window</span>
               </span>
             </div>
@@ -1656,7 +1682,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               onChange={e => setPersistenceLevel(parseInt(e.target.value))}
               style={{ width: '100%', accentColor: '#85e89d' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
-              <span>最容易 (5s)</span><span>最困難 (23s)</span>
+              <span>{`${T(lang ?? 'zh', 'trainEasiest')} (5s)`}</span><span>{`${T(lang ?? 'zh', 'trainHardest')} (23s)`}</span>
             </div>
           </div>
           {/* TA mode toggle */}
@@ -1668,7 +1694,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
                 background: taMode === m ? 'rgba(88,166,255,0.15)' : 'var(--bg-secondary)',
                 color: taMode === m ? '#58a6ff' : 'var(--text-secondary)',
               }}>
-                {m === 'and' ? 'All or None' : 'Average'}
+                {m === 'and' ? T(lang ?? 'zh', 'trainAllOrNone') : T(lang ?? 'zh', 'trainAverage')}
               </button>
             ))}
           </div>
@@ -1676,19 +1702,19 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
         {/* Active indicators list */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>Active Indicators</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>{T(lang ?? 'zh', 'trainActiveInd')}</div>
           {enabledIndicators.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', padding: '8px 0' }}>No active indicators</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', padding: '8px 0' }}>{T(lang ?? 'zh', 'trainNoActiveInd')}</div>
           )}
           {enabledIndicators.map(ind => {
             const met = (ind.direction === 'up' && ind.value >= ind.threshold) || (ind.direction === 'down' && ind.value < ind.threshold);
             return (
               <div key={ind.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(93,109,134,0.15)' }}>
                 <span style={{ fontSize: 12, color: '#dce9f8' }}>
-                  EEG #{ind.id}&nbsp;
-                  <span style={{ color: 'var(--text-secondary)' }}>{ind.direction === 'up' ? '↑' : '↓'} {ind.id === 5 ? 'Formula' : `${ind.channel} · ${ind.band}`}</span>
+                  {T(lang ?? 'zh', 'trainEegCard')}{ind.id}&nbsp;
+                  <span style={{ color: 'var(--text-secondary)' }}>{ind.direction === 'up' ? '↑' : '↓'} {ind.id === 5 ? T(lang ?? 'zh', 'trainFormula') : `${ind.channel} · ${ind.band}`}</span>
                 </span>
-                <Badge label={met ? '達標' : '未達標'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
+                <Badge label={met ? T(lang ?? 'zh', 'trainMet') : T(lang ?? 'zh', 'trainNotMet')} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
               </div>
             );
           })}
@@ -1699,7 +1725,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
                 Cardiac&nbsp;<span style={{ color: 'var(--text-secondary)' }}>{cardiac.direction === 'up' ? '↑' : '↓'} LF/HF</span>
               </span>
               <Badge
-                label={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? '達標' : '未達標'}
+                label={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? T(lang ?? 'zh', 'trainMet') : T(lang ?? 'zh', 'trainNotMet')}
                 color={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? '#3fb950' : '#f85149'}
                 bg={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'}
               />
@@ -1709,8 +1735,8 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
         {/* Feedback content */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>Feedback Content</div>
-          <input type="url" placeholder="Feedback URL (e.g. https://…)"
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>{T(lang ?? 'zh', 'trainFeedbackContent')}</div>
+          <input type="url" placeholder={T(lang ?? 'zh', 'trainFeedbackUrlPlaceholder')}
             value={feedbackUrl} onChange={e => { setFeedbackUrl(e.target.value); setFeedbackFile(null); feedbackFileRef.current = null; }}
             style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '6px 8px', marginBottom: 6, boxSizing: 'border-box' }} />
           {/* Hidden file inputs */}
@@ -1723,7 +1749,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           {/* File picker buttons */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
             {(['video', 'pptx', 'pdf'] as const).map((type) => {
-              const labels: Record<string, string> = { video: '▶ 影片', pptx: '▶ 簡報', pdf: '▶ PDF' };
+              const labels: Record<string, string> = { video: T(lang ?? 'zh', 'trainVideoBtn'), pptx: T(lang ?? 'zh', 'trainSlideBtn'), pdf: T(lang ?? 'zh', 'trainPdfBtn') };
               const refs: Record<string, React.RefObject<HTMLInputElement | null>> = { video: videoInputRef, pptx: pptxInputRef, pdf: pdfInputRef };
               const isSelected = feedbackFile && (
                 type === 'pdf' ? feedbackFile.name.toLowerCase().endsWith('.pdf')
@@ -1747,7 +1773,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-tertiary)', borderRadius: 6, padding: '6px 10px', marginBottom: 10 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>遮罩透明度（自動）</span>
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{T(lang ?? 'zh', 'trainOverlayAuto')}</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#58a6ff', fontFamily: 'ui-monospace,monospace' }}>{overlayOpacity}%</span>
           </div>
           <div style={{
@@ -1763,7 +1789,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
                   : feedbackUrl.slice(0, 32) + (feedbackUrl.length > 32 ? '…' : '')}
               </span>
             ) : (
-              <span style={{ fontSize: 11, color: 'rgba(93,109,134,0.5)' }}>遮罩預覽</span>
+              <span style={{ fontSize: 11, color: 'rgba(93,109,134,0.5)' }}>{T(lang ?? 'zh', 'trainOverlayPreview')}</span>
             )}
           </div>
           {/* NFB Audio Feedback */}
@@ -1772,7 +1798,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               <input type="checkbox" checked={nfbAudioEnabled} onChange={e => setNfbAudioEnabled(e.target.checked)}
                 style={{ accentColor: '#58a6ff', width: 13, height: 13 }} />
               <span style={{ fontSize: 11, fontWeight: 600, color: nfbAudioEnabled ? '#58a6ff' : 'var(--text-secondary)' }}>
-                NFB 音效回饋（音量 = OO）
+                {T(lang ?? 'zh', 'trainAudioFeedback')}
               </span>
             </label>
             {nfbAudioEnabled && (
@@ -1787,14 +1813,14 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
                   flex: 1, padding: '4px 0', borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: 'pointer',
                   border: `1px solid ${nfbAudioSrc && !bnbAudioBlob?.url?.startsWith(nfbAudioSrc.url) ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`,
                   background: 'var(--bg-secondary)', color: 'var(--text-secondary)',
-                }}>+ 選取音檔</button>
+                }}>{T(lang ?? 'zh', 'trainPickAudio')}</button>
                 {bnbAudioBlob && (
                   <button onClick={() => setNfbAudioSrc(bnbAudioBlob)} style={{
                     flex: 1, padding: '4px 0', borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: 'pointer',
                     border: `1px solid ${nfbAudioSrc?.url === bnbAudioBlob.url ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`,
                     background: nfbAudioSrc?.url === bnbAudioBlob.url ? 'rgba(88,166,255,0.15)' : 'var(--bg-secondary)',
                     color: nfbAudioSrc?.url === bnbAudioBlob.url ? '#58a6ff' : 'var(--text-secondary)',
-                  }}>使用 BNB 音檔</button>
+                  }}>{T(lang ?? 'zh', 'trainUseBnbAudio')}</button>
                 )}
                 {nfbAudioSrc && (
                   <div style={{ width: '100%', fontSize: 10, color: 'rgba(88,166,255,0.7)', marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1809,9 +1835,8 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
             {/* Baseline button */}
             <button
               onClick={handleBaseline}
-              disabled={baselinePhase === 'recording'}
               style={{
-                flex: '0 0 auto', padding: '8px 10px', borderRadius: 7, border: 'none', cursor: baselinePhase === 'recording' ? 'default' : 'pointer',
+                flex: '0 0 auto', padding: '8px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
                 background: baselinePhase === 'recording'
                   ? 'rgba(248,129,74,0.25)'
                   : baselinePhase === 'done'
@@ -1823,10 +1848,10 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               }}
             >
               {baselinePhase === 'recording'
-                ? `● ${30 - baselineProgress}s`
+                ? `${T(lang ?? 'zh', 'trainBaselineStop')} ${30 - baselineProgress}s`
                 : baselinePhase === 'done'
-                  ? '✓ Baseline'
-                  : 'Baseline'}
+                  ? T(lang ?? 'zh', 'trainBaselineDone')
+                  : T(lang ?? 'zh', 'trainBaseline')}
             </button>
             {/* Start / Stop session button */}
             <button
@@ -1839,19 +1864,20 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
                 color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em',
               }}
             >
-              {sessionRunning ? '⏹ Stop NFB Session' : '▶ Start NFB Session'}
+              {sessionRunning ? T(lang ?? 'zh', 'trainStopSession') : T(lang ?? 'zh', 'trainStartSession')}
             </button>
           </div>
         </div>
 
         {/* Operator notes */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>Operator Notes</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>{T(lang ?? 'zh', 'trainOpNotes')}</div>
           <textarea value={operatorNotes} onChange={e => setOperatorNotes(e.target.value)}
-            placeholder="輸入操作員備注…" rows={4}
+            placeholder={T(lang ?? 'zh', 'trainOpNotesPlaceholder')} rows={4}
             style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '6px 8px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
         </div>
       </div>
     </div>
+    </LangContext.Provider>
   );
 };

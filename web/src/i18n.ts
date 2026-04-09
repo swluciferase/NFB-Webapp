@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 export type Lang = 'zh' | 'en';
 
 const translations: Record<string, Record<Lang, string>> = {
@@ -178,7 +179,89 @@ const translations: Record<string, Record<Lang, string>> = {
   recordReportTooShort:   { zh: '錄製時間不足 90 秒，無法生成報告', en: 'Recording must be at least 90 seconds to generate a report' },
   recordGeneratingReport: { zh: '分析中，請稍候…', en: 'Analyzing EEG, please wait…' },
   recordReportError:      { zh: '報告生成失敗', en: 'Report generation failed' },
+
+  // Training view — sub-component labels
+  trainEegCard:      { zh: 'EEG #', en: 'EEG #' },
+  trainCustomIdx:    { zh: '自定義指標', en: 'Custom Index' },
+  trainPresetSelect: { zh: '— 選擇預設 —', en: '— Select Preset —' },
+  trainDirUp:        { zh: '↑ 升', en: '↑ Up' },
+  trainDirDown:      { zh: '↓ 降', en: '↓ Down' },
+  trainDragThresh:   { zh: '↕ 拖曳調整 Threshold', en: '↕ Drag to adjust threshold' },
+  trainAuto:         { zh: '自動', en: 'AUTO' },
+  trainFormulaLabel: { zh: '公式', en: 'Formula' },
+  trainFormulaPlaceholder: { zh: '輸入公式…', en: 'Enter formula…' },
+  trainFormulaHint:  { zh: '頻道: Fp1 Fp2 T7 T8 O1 O2 Fz Pz · 頻帶: Delta Theta Alpha SMR Beta HiBeta Gamma', en: 'Channels: Fp1 Fp2 T7 T8 O1 O2 Fz Pz · Bands: Delta Theta Alpha SMR Beta HiBeta Gamma' },
+  trainBreathing:    { zh: '呼吸', en: 'Breathing' },
+  trainOpenVisioMynd:{ zh: '🔗 開啟 VisioMynd', en: '🔗 Open VisioMynd' },
+  trainMet:          { zh: '達標', en: 'Met' },
+  trainNotMet:       { zh: '未達標', en: 'Not Met' },
+  trainOverall:      { zh: 'Overall', en: 'Overall' },
+  // BNB
+  trainBnbTitle:     { zh: '雙耳差頻控制', en: 'BNB Controls' },
+  trainAudioFile:    { zh: '+ 音樂檔案', en: '+ Audio File' },
+  trainOscSource:    { zh: '振盪器音源', en: 'Oscillator Source' },
+  trainEnableOsc:    { zh: '啟用振盪器', en: 'Enable Oscillator' },
+  trainWaveform:     { zh: '波形', en: 'Waveform' },
+  trainFreqHz:       { zh: '頻率 (Hz)', en: 'Freq (Hz)' },
+  trainOscVol:       { zh: '振盪器音量', en: 'Osc Vol' },
+  trainBbFreq:       { zh: '雙耳差頻', en: 'Binaural Beat Frequency' },
+  trainFixedFreq:    { zh: '固定頻率', en: 'Fixed Frequency' },
+  trainCurrentBeat:  { zh: '當前差頻', en: 'Current Beat' },
+  trainBnbMethod:    { zh: '差頻方法', en: 'Binaural Method' },
+  trainCarrierBand:  { zh: '載波頻段', en: 'Carrier Band' },
+  trainCarrierFreq:  { zh: '載波頻率', en: 'Carrier Freq' },
+  trainModulation:   { zh: '調變', en: 'Modulation' },
+  trainEnableMod:    { zh: '啟用調變', en: 'Enable Modulation' },
+  trainInterval:     { zh: '間隔 (ms)', en: 'Interval (ms)' },
+  trainStep:         { zh: '步進 (Hz)', en: 'Step (Hz)' },
+  trainTrend:        { zh: '趨勢', en: 'Trend' },
+  trainVol:          { zh: '音量', en: 'Vol' },
+  trainWhiteNoise:   { zh: '白噪音', en: 'White Noise' },
+  trainOceanWaves:   { zh: '海浪聲', en: 'Ocean Waves' },
+  // Dashboard / stats
+  trainDuration:     { zh: '時長', en: 'Duration' },
+  trainTA:           { zh: '目標達成率', en: 'Target Achievement' },
+  trainRR:           { zh: '獎勵率', en: 'Reward Rate' },
+  trainOO:           { zh: '遮罩透明度', en: 'Overlay Opacity' },
+  trainActivityLevel:{ zh: '活躍度', en: 'Activity' },
+  trainPersistLevel: { zh: '持續度', en: 'Persistence' },
+  trainEasiest:      { zh: '最容易', en: 'Easiest' },
+  trainHardest:      { zh: '最困難', en: 'Hardest' },
+  trainAllOrNone:    { zh: '全達標', en: 'All or None' },
+  trainAverage:      { zh: '平均', en: 'Average' },
+  trainWindow:       { zh: 'window', en: 'window' },
+  // Active indicators list
+  trainActiveInd:    { zh: '啟用中的指標', en: 'Active Indicators' },
+  trainNoActiveInd:  { zh: '尚無啟用的指標', en: 'No active indicators' },
+  trainFormula:      { zh: '公式', en: 'Formula' },
+  // Feedback Content
+  trainFeedbackContent: { zh: '回饋內容', en: 'Feedback Content' },
+  trainFeedbackUrlPlaceholder: { zh: '回饋網址 (e.g. https://…)', en: 'Feedback URL (e.g. https://…)' },
+  trainVideoBtn:     { zh: '▶ 影片', en: '▶ Video' },
+  trainSlideBtn:     { zh: '▶ 簡報', en: '▶ Slides' },
+  trainPdfBtn:       { zh: '▶ PDF', en: '▶ PDF' },
+  trainOverlayAuto:  { zh: '遮罩透明度（自動）', en: 'Overlay Opacity (Auto)' },
+  trainOverlayPreview: { zh: '遮罩預覽', en: 'Overlay Preview' },
+  trainAudioFeedback: { zh: 'NFB 音效回饋（音量 = OO）', en: 'NFB Audio Feedback (Vol = OO)' },
+  trainPickAudio:    { zh: '+ 選取音檔', en: '+ Pick Audio' },
+  trainUseBnbAudio:  { zh: '使用 BNB 音檔', en: 'Use BNB Audio' },
+  // Baseline + Session
+  trainBaseline:     { zh: 'Baseline 基線', en: 'Baseline' },
+  trainBaselineStop: { zh: '⏹ 停止錄製', en: '⏹ Stop Recording' },
+  trainBaselineDone: { zh: '✓ 基線完成', en: '✓ Baseline Done' },
+  trainStartSession: { zh: '▶ 開始 NFB 訓練', en: '▶ Start NFB Session' },
+  trainStopSession:  { zh: '⏹ 停止 NFB 訓練', en: '⏹ Stop NFB Session' },
+  // Operator notes
+  trainOpNotes:      { zh: '操作員備注', en: 'Operator Notes' },
+  trainOpNotesPlaceholder: { zh: '輸入操作員備注…', en: 'Enter operator notes…' },
+  // BNB method descriptions
+  bnbMethodGlobalSsbZh: { zh: '單邊帶調制法：兩聲道共用一個載波，以相位差編碼差頻。', en: 'Single-sideband: both channels share one carrier, beat encoded as phase offset.' },
+  bnbMethodBandShiftZh: { zh: '每聲道分別以 base ± (beat/2) Hz 播放，產生純頻率差。', en: 'Each channel plays at base ± (beat/2) Hz for a pure frequency difference.' },
+  bnbMethodSubLayerZh:  { zh: '載波隱藏於可聽域以下；差頻以振幅包絡進行調製。', en: 'Carrier hidden below audible range; beat modulates amplitude envelope.' },
 };
+
+export const LangContext = createContext<Lang>('zh');
+export const useLang = (): Lang => useContext(LangContext);
 
 export const T = (lang: Lang, key: string): string =>
   translations[key]?.[lang] ?? key;

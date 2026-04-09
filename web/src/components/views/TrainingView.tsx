@@ -1061,7 +1061,8 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   }, []);
 
   const applyOverlay = useCallback((opacityPct: number) => {
-    sendToFeedbackWindow({ type: 'nfb_overlay', opacity: 1 - opacityPct / 100 });
+    // OO=0 → overlay transparent (content visible); OO=100 → overlay opaque (black)
+    sendToFeedbackWindow({ type: 'nfb_overlay', opacity: opacityPct / 100 });
   }, [sendToFeedbackWindow]);
 
   // Auto-compute overlay opacity from AT: OO = K - 10*sqrt(AT), clamped 0–100
@@ -1378,12 +1379,12 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           </div>
           <div style={{
             width: '100%', height: 48,
-            background: `rgba(0,0,0,${1 - overlayOpacity / 100})`,
+            background: `rgba(0,0,0,${overlayOpacity / 100})`,
             border: '1px dashed rgba(93,109,134,0.4)', borderRadius: 6,
             display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10,
           }}>
             {feedbackUrl ? (
-              <span style={{ color: `rgba(88,166,255,${overlayOpacity / 100})`, fontSize: 11 }}>
+              <span style={{ color: `rgba(88,166,255,${1 - overlayOpacity / 100})`, fontSize: 11 }}>
                 {feedbackUrl.slice(0, 32)}{feedbackUrl.length > 32 ? '…' : ''}
               </span>
             ) : (

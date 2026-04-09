@@ -3,7 +3,7 @@ export type Lang = 'zh' | 'en';
 
 const translations: Record<string, Record<Lang, string>> = {
   // App title
-  appTitle: { zh: 'sgimacog EEG', en: 'sgimacog EEG' },
+  appTitle: { zh: 'SoraMynd - NFB', en: 'SoraMynd - NFB' },
 
   // Connection status
   connected: { zh: '已連接', en: 'Connected' },

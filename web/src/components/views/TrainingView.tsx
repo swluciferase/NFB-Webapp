@@ -966,8 +966,8 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
 
 const HISTORY_LEN = 60;
 
-// 活躍度 (Activity): K constant for OO = K - 10*sqrt(AT)
-const K_VALUES = [36, 49, 62, 75, 88] as const;
+// 活躍度 (Activity): K constant for OO = K * sqrt(AT)
+const K_VALUES = [16.67, 14.29, 12.70, 11.55, 10.66] as const;
 const DIFFICULTY_LABELS = ['很容易', '容易', '中等', '困難', '很困難'] as const;
 
 // 持續度 (Persistence): moving-window size in seconds
@@ -1079,15 +1079,15 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   }, []);
 
   const applyOverlay = useCallback((opacityPct: number) => {
-    // OO=0 → overlay transparent (content visible); OO=100 → overlay opaque (black)
-    sendToFeedbackWindow({ type: 'nfb_overlay', opacity: opacityPct / 100 });
+    // OO=100 → overlay transparent (content visible); OO=0 → overlay opaque (black)
+    sendToFeedbackWindow({ type: 'nfb_overlay', opacity: 1 - opacityPct / 100 });
   }, [sendToFeedbackWindow]);
 
-  // Auto-compute overlay opacity from AT: OO = K - 10*sqrt(AT), clamped 0–100
+  // Auto-compute overlay opacity from AT: OO = K * sqrt(AT), clamped 0–100
   // Runs always so dashboard shows live OO; applyOverlay only affects feedback window (no-op when closed)
   useEffect(() => {
     const k = K_VALUES[difficultyLevel - 1]!;
-    const oo = Math.max(0, Math.min(100, Math.round(k - 10 * Math.sqrt(aboveThresholdPct))));
+    const oo = Math.max(0, Math.min(100, Math.round(k * Math.sqrt(aboveThresholdPct))));
     setOverlayOpacity(oo);
     if (sessionRunning) applyOverlay(oo);
   }, [aboveThresholdPct, difficultyLevel, sessionRunning, applyOverlay]);
@@ -1434,12 +1434,12 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           </div>
           <div style={{
             width: '100%', height: 48,
-            background: `rgba(0,0,0,${overlayOpacity / 100})`,
+            background: `rgba(0,0,0,${1 - overlayOpacity / 100})`,
             border: '1px dashed rgba(93,109,134,0.4)', borderRadius: 6,
             display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10,
           }}>
             {feedbackUrl ? (
-              <span style={{ color: `rgba(88,166,255,${1 - overlayOpacity / 100})`, fontSize: 11 }}>
+              <span style={{ color: `rgba(88,166,255,${overlayOpacity / 100})`, fontSize: 11 }}>
                 {feedbackUrl.slice(0, 32)}{feedbackUrl.length > 32 ? '…' : ''}
               </span>
             ) : (

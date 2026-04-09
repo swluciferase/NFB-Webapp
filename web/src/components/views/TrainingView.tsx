@@ -9,7 +9,7 @@ import { DEFAULT_FILTER_PARAMS } from '../../types/eeg';
 type Channel = typeof CHANNEL_LABELS[number];
 type Band = 'Delta' | 'Theta' | 'Alpha' | 'SMR' | 'Beta' | 'Hi-Beta' | 'Gamma';
 type Direction = 'up' | 'down';
-type OscWaveform = 'sine' | 'square' | 'triangle' | 'sawtooth';
+type OscWaveform = 'sine' | 'square' | 'triangle' | 'sawtooth' | 'white-noise' | 'ocean-waves';
 type BnbMethod = 'global-ssb' | 'band-shift' | 'sub-layer';
 type ModTrend = 'up' | 'down' | 'random';
 
@@ -53,6 +53,7 @@ interface EegIndicator {
 
 interface CardiacState {
   enabled: boolean;
+  autoThreshold: boolean;
   lfValue: number;
   hfValue: number;
   lfHfRatio: number;
@@ -268,11 +269,16 @@ const EegCard: FC<{
         />
       </div>
 
-      {/* Threshold display + Auto toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 12, color: indicator.autoThreshold ? 'rgba(88,166,255,0.7)' : 'rgba(248,129,74,0.9)', fontFamily: 'ui-monospace,monospace' }}>
-          {indicator.autoThreshold ? 'AUTO' : `${indicator.threshold.toFixed(1)} μV²`}
-        </span>
+      {/* Threshold input + Auto toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
+        <input
+          type="number"
+          value={+indicator.threshold.toFixed(1)}
+          onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) onThresholdChange(indicator.id, v - indicator.threshold); }}
+          disabled={indicator.autoThreshold}
+          step={0.1} min={0.1}
+          style={{ width: 72, background: 'var(--bg-tertiary)', border: `1px solid ${indicator.autoThreshold ? 'rgba(88,166,255,0.2)' : 'rgba(248,129,74,0.4)'}`, borderRadius: 4, color: indicator.autoThreshold ? 'rgba(88,166,255,0.4)' : 'rgba(248,129,74,0.9)', fontSize: 11, padding: '2px 5px', fontFamily: 'ui-monospace,monospace', textAlign: 'right', opacity: indicator.autoThreshold ? 0.5 : 1 }}
+        />
         <button
           onClick={() => onAutoThresholdToggle(indicator.id)}
           style={{
@@ -403,10 +409,15 @@ const FormulaCard: FC<{
       </div>
 
       {/* Threshold + Auto */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 12, color: indicator.autoThreshold ? 'rgba(88,166,255,0.7)' : 'rgba(248,129,74,0.9)', fontFamily: 'ui-monospace,monospace' }}>
-          {indicator.autoThreshold ? 'AUTO' : indicator.threshold.toFixed(3)}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
+        <input
+          type="number"
+          value={+indicator.threshold.toFixed(3)}
+          onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) onThresholdChange(indicator.id, v - indicator.threshold); }}
+          disabled={indicator.autoThreshold}
+          step={0.001} min={0.001}
+          style={{ width: 80, background: 'var(--bg-tertiary)', border: `1px solid ${indicator.autoThreshold ? 'rgba(88,166,255,0.2)' : 'rgba(248,129,74,0.4)'}`, borderRadius: 4, color: indicator.autoThreshold ? 'rgba(88,166,255,0.4)' : 'rgba(248,129,74,0.9)', fontSize: 11, padding: '2px 5px', fontFamily: 'ui-monospace,monospace', textAlign: 'right', opacity: indicator.autoThreshold ? 0.5 : 1 }}
+        />
         <button
           onClick={() => onAutoThresholdToggle(indicator.id)}
           style={{
@@ -433,47 +444,35 @@ const CardiacCard: FC<{
   onToggle: () => void;
   onDirectionChange: (d: Direction) => void;
   onThresholdChange: (delta: number) => void;
+  onAutoThresholdToggle: () => void;
   onOpenVisioMynd: () => void;
-}> = ({ state, isLive, liveHr, liveBreathing, onToggle, onDirectionChange, onThresholdChange, onOpenVisioMynd }) => {
+}> = ({ state, isLive, liveHr, liveBreathing, onToggle, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onOpenVisioMynd }) => {
   const ratio = state.lfHfRatio;
   const aboveThreshold = ratio >= state.threshold;
   const met = aboveThreshold === (state.direction === 'up');
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.3)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, opacity: state.enabled ? 1 : 0.55 }}>
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.3)', borderRadius: 10, padding: '10px 12px', marginBottom: 6, opacity: state.enabled ? 1 : 0.55 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>Cardiac</span>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>Cardiac</span>
           {isLive
             ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
             : <Badge label="—" color="rgba(130,150,180,0.5)" bg="rgba(93,109,134,0.10)" />}
-          <Badge label="VisioMynd LF/HF" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
-          <button onClick={onToggle} style={{ background: state.enabled ? 'rgba(63,185,80,0.2)' : 'rgba(100,115,135,0.2)', border: `1px solid ${state.enabled ? 'rgba(63,185,80,0.5)' : 'rgba(100,115,135,0.4)'}`, borderRadius: 5, color: state.enabled ? '#3fb950' : '#6b7580', fontSize: 11, fontWeight: 600, padding: '2px 8px', cursor: 'pointer' }}>
-            {state.enabled ? 'ON' : 'OFF'}
-          </button>
+          <Badge label="LF/HF" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
         </div>
+        <button onClick={onToggle} style={{ background: state.enabled ? 'rgba(63,185,80,0.2)' : 'rgba(100,115,135,0.2)', border: `1px solid ${state.enabled ? 'rgba(63,185,80,0.5)' : 'rgba(100,115,135,0.4)'}`, borderRadius: 5, color: state.enabled ? '#3fb950' : '#6b7580', fontSize: 11, fontWeight: 600, padding: '2px 8px', cursor: 'pointer' }}>
+          {state.enabled ? 'ON' : 'OFF'}
+        </button>
       </div>
       {isLive && (liveHr !== null || liveBreathing !== null) && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
-          {liveHr !== null && (
-            <div>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>HR</span>
-              <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveHr} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>bpm</span></div>
-            </div>
-          )}
-          {liveBreathing !== null && (
-            <div>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>呼吸</span>
-              <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveBreathing} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>/min</span></div>
-            </div>
-          )}
+          {liveHr !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>HR</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveHr} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>bpm</span></div></div>}
+          {liveBreathing !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>呼吸</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveBreathing} <span style={{ fontSize: 11 }}>/min</span></div></div>}
         </div>
       )}
       <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
         {([['LF', state.lfValue], ['HF', state.hfValue]] as [string, number][]).map(([k, v]) => (
-          <div key={k}>
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{k}</span>
-            <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{(v as number).toFixed(2)}</div>
-          </div>
+          <div key={k}><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{k}</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{(v as number).toFixed(2)}</div></div>
         ))}
         <div style={{ flex: 1, textAlign: 'right' }}>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>LF/HF</span>
@@ -487,19 +486,39 @@ const CardiacCard: FC<{
           </button>
         ))}
       </div>
-      <div style={{ marginBottom: 8 }}>
-        <LineCanvas history={state.history} threshold={state.threshold} color="#f9a02e" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
+          {isLive ? ratio.toFixed(2) : '—'}
+        </span>
+        <Badge label={met ? '達標' : '未達標'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <button onClick={() => onThresholdChange(-0.1)} style={{ width: 28, height: 24, background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'rgba(248,129,74,0.9)', fontFamily: 'ui-monospace,monospace' }}>{state.threshold.toFixed(1)}</span>
-        <button onClick={() => onThresholdChange(0.1)} style={{ width: 28, height: 24, background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+      <div style={{ marginBottom: 4 }}>
+        <HistCanvas
+          history={state.history}
+          threshold={state.threshold}
+          onThresholdChange={state.autoThreshold ? undefined : (delta) => onThresholdChange(delta)}
+        />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between', marginBottom: 6 }}>
+        <input
+          type="number"
+          value={+state.threshold.toFixed(2)}
+          onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) onThresholdChange(v - state.threshold); }}
+          disabled={state.autoThreshold}
+          step={0.1} min={0.1}
+          style={{ width: 72, background: 'var(--bg-tertiary)', border: `1px solid ${state.autoThreshold ? 'rgba(88,166,255,0.2)' : 'rgba(248,129,74,0.4)'}`, borderRadius: 4, color: state.autoThreshold ? 'rgba(88,166,255,0.4)' : 'rgba(248,129,74,0.9)', fontSize: 11, padding: '2px 5px', fontFamily: 'ui-monospace,monospace', textAlign: 'right', opacity: state.autoThreshold ? 0.5 : 1 }}
+        />
+        <button
+          onClick={onAutoThresholdToggle}
+          style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, border: `1px solid ${state.autoThreshold ? 'rgba(88,166,255,0.5)' : 'rgba(93,109,134,0.4)'}`, background: state.autoThreshold ? 'rgba(88,166,255,0.15)' : 'var(--bg-tertiary)', color: state.autoThreshold ? '#58a6ff' : 'var(--text-secondary)', cursor: 'pointer' }}
+        >
+          AUTO
+        </button>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button onClick={onOpenVisioMynd} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: '1px solid rgba(88,166,255,0.4)', background: 'rgba(88,166,255,0.1)', color: '#8ecfff', cursor: 'pointer' }}>
           🔗 Open VisioMynd
         </button>
-        <Badge label={met ? '達標' : '未達標'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
     </div>
   );
@@ -589,8 +608,122 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
+  // ── Web Audio ──
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const leftOscRef = useRef<OscillatorNode | null>(null);
+  const rightOscRef = useRef<OscillatorNode | null>(null);
+  const noiseSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const lfoRef = useRef<OscillatorNode | null>(null);
+  const oscGainRef = useRef<GainNode | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
+  const getCtx = useCallback((): AudioContext => {
+    if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+    if (audioCtxRef.current.state === 'suspended') void audioCtxRef.current.resume();
+    return audioCtxRef.current;
+  }, []);
+
+  const stopOscNodes = useCallback(() => {
+    const s = (n: { stop: () => void } | null) => { try { n?.stop(); } catch {} };
+    s(leftOscRef.current); s(rightOscRef.current);
+    s(noiseSourceRef.current); s(lfoRef.current);
+    leftOscRef.current = rightOscRef.current = noiseSourceRef.current = lfoRef.current = null;
+    oscGainRef.current?.disconnect(); oscGainRef.current = null;
+  }, []);
+
+  // Start/stop oscillator when enabled or waveform changes
+  useEffect(() => {
+    if (!bnb.oscEnabled) { stopOscNodes(); return; }
+    const ctx = getCtx();
+    stopOscNodes();
+    const gain = ctx.createGain();
+    gain.gain.value = bnb.oscVolume / 100;
+    gain.connect(ctx.destination);
+    oscGainRef.current = gain;
+    // Snapshot current values to avoid stale reads
+    const wf = bnb.oscWaveform;
+    const freq = bnb.oscFreq;
+    const beat = bnb.bbCurrentHz;
+    if (wf === 'white-noise') {
+      const buf = ctx.createBuffer(2, ctx.sampleRate * 2, ctx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      src.connect(gain); src.start(); noiseSourceRef.current = src;
+    } else if (wf === 'ocean-waves') {
+      const buf = ctx.createBuffer(2, ctx.sampleRate * 4, ctx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+      const noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
+      const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 600; filter.Q.value = 0.7;
+      const waveGain = ctx.createGain(); waveGain.gain.value = 0.5;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 0.12;
+      const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.5;
+      lfo.connect(lfoGain); lfoGain.connect(waveGain.gain);
+      noise.connect(filter); filter.connect(waveGain); waveGain.connect(gain);
+      lfo.start(); noise.start();
+      noiseSourceRef.current = noise; lfoRef.current = lfo;
+    } else {
+      // Binaural: left = freq - beat/2, right = freq + beat/2
+      const lo = ctx.createOscillator(); const ro = ctx.createOscillator();
+      lo.type = ro.type = wf as OscillatorType;
+      lo.frequency.value = Math.max(20, freq - beat / 2);
+      ro.frequency.value = Math.max(20, freq + beat / 2);
+      const lp = ctx.createStereoPanner(); lp.pan.value = -1;
+      const rp = ctx.createStereoPanner(); rp.pan.value = 1;
+      lo.connect(lp); lp.connect(gain);
+      ro.connect(rp); rp.connect(gain);
+      lo.start(); ro.start();
+      leftOscRef.current = lo; rightOscRef.current = ro;
+    }
+    return stopOscNodes;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bnb.oscEnabled, bnb.oscWaveform, getCtx, stopOscNodes]);
+
+  // Smooth binaural frequency update without full restart
+  useEffect(() => {
+    const ctx = audioCtxRef.current;
+    if (!ctx || !leftOscRef.current || !rightOscRef.current) return;
+    const t = ctx.currentTime;
+    leftOscRef.current.frequency.setTargetAtTime(Math.max(20, bnb.oscFreq - bnb.bbCurrentHz / 2), t, 0.05);
+    rightOscRef.current.frequency.setTargetAtTime(Math.max(20, bnb.oscFreq + bnb.bbCurrentHz / 2), t, 0.05);
+  }, [bnb.bbCurrentHz, bnb.oscFreq]);
+
+  // Oscillator volume without restart
+  useEffect(() => {
+    if (!oscGainRef.current || !audioCtxRef.current) return;
+    oscGainRef.current.gain.setTargetAtTime(bnb.oscVolume / 100, audioCtxRef.current.currentTime, 0.05);
+  }, [bnb.oscVolume]);
+
+  // Audio element playback
+  useEffect(() => {
+    const el = audioElRef.current;
+    if (!el) return;
+    el.volume = bnb.volume / 100;
+    if (bnb.playState === 'playing') el.play().catch(() => {});
+    else if (bnb.playState === 'paused') el.pause();
+    else { el.pause(); el.currentTime = 0; }
+  }, [bnb.playState, bnb.volume]);
+
+  // Cleanup
+  useEffect(() => () => {
+    stopOscNodes();
+    audioCtxRef.current?.close().catch(() => {});
+    audioElRef.current?.pause();
+  }, [stopOscNodes]);
+
   const handleFile = (file: File) => {
-    if (file) onChange({ audioFileName: file.name, playState: 'stopped', progress: 0 });
+    if (!audioElRef.current) {
+      const el = new Audio();
+      el.addEventListener('ended', () => onChangeRef.current({ playState: 'stopped' }));
+      el.addEventListener('timeupdate', () => {
+        if (!el.duration) return;
+        onChangeRef.current({ progress: Math.round(el.currentTime / el.duration * 100) });
+      });
+      audioElRef.current = el;
+    }
+    audioElRef.current.src = URL.createObjectURL(file);
+    onChange({ audioFileName: file.name, playState: 'stopped', progress: 0 });
   };
 
   const formatHz = (v: number) => v < 10 ? v.toFixed(2) : v.toFixed(1);
@@ -662,8 +795,8 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
             <span style={labelStyle}>Waveform</span>
             <select value={bnb.oscWaveform} onChange={e => onChange({ oscWaveform: e.target.value as OscWaveform })}
               style={{ ...inputStyle, padding: '3px 6px' }} disabled={!bnb.oscEnabled}>
-              {(['sine', 'square', 'triangle', 'sawtooth'] as OscWaveform[]).map(w => (
-                <option key={w} value={w}>{w.charAt(0).toUpperCase() + w.slice(1)}</option>
+              {(['sine', 'square', 'triangle', 'sawtooth', 'white-noise', 'ocean-waves'] as OscWaveform[]).map(w => (
+                <option key={w} value={w}>{w === 'white-noise' ? 'White Noise' : w === 'ocean-waves' ? 'Ocean Waves' : w.charAt(0).toUpperCase() + w.slice(1)}</option>
               ))}
             </select>
           </div>
@@ -671,7 +804,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
             <span style={labelStyle}>Freq (Hz)</span>
             <input type="number" min={20} max={20000} value={bnb.oscFreq}
               onChange={e => onChange({ oscFreq: parseFloat(e.target.value) || 440 })}
-              style={inputStyle} disabled={!bnb.oscEnabled} />
+              style={inputStyle} disabled={!bnb.oscEnabled || bnb.oscWaveform === 'white-noise' || bnb.oscWaveform === 'ocean-waves'} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -789,9 +922,10 @@ function makeDefaultIndicators(): EegIndicator[] {
 export interface TrainingViewProps {
   packets?: EegPacket[];
   filterParams?: FilterParams;
+  hidden?: boolean;
 }
 
-export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) => {
+export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hidden }) => {
   const liveBandPower = useBandPower(packets, filterParams ?? DEFAULT_FILTER_PARAMS);
   // Ref for stale-closure-safe access inside tick
   const liveBandPowerRef = useRef(liveBandPower);
@@ -802,6 +936,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
   const [indicators, setIndicators] = useState<EegIndicator[]>(makeDefaultIndicators);
   const [cardiac, setCardiac] = useState<CardiacState>({
     enabled: true,
+    autoThreshold: false,
     lfValue: 0, hfValue: 0, lfHfRatio: 0,
     direction: 'up', threshold: 1.5, history: [],
   });
@@ -1012,7 +1147,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
     `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 
   const colStyle: React.CSSProperties = {
-    flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0, overflowY: 'auto', paddingRight: 4,
+    flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 0, overflowY: 'auto', paddingRight: 4,
   };
   const sectionHeaderStyle: React.CSSProperties = {
     fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase',
@@ -1029,7 +1164,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
   };
 
   return (
-    <div style={{ display: 'flex', gap: 16, height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: hidden ? 'none' : 'flex', gap: 16, height: '100%', overflow: 'hidden' }}>
 
       {/* ── Column 1: EEG odd (#1 #3 #5) ── */}
       <div style={colStyle}>
@@ -1063,6 +1198,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
           onToggle={() => setCardiac(c => ({ ...c, enabled: !c.enabled }))}
           onDirectionChange={d => setCardiac(c => ({ ...c, direction: d }))}
           onThresholdChange={delta => setCardiac(c => ({ ...c, threshold: Math.max(0.1, c.threshold + delta) }))}
+          onAutoThresholdToggle={() => setCardiac(c => ({ ...c, autoThreshold: !c.autoThreshold }))}
           onOpenVisioMynd={handleOpenVisioMynd}
         />
       </div>

@@ -540,7 +540,7 @@ function App() {
         );
 
       case 'training':
-        return <TrainingView packets={latestPackets} filterParams={filterParams} />;
+        return null; // rendered always-mounted below
 
       default:
         return null;
@@ -576,8 +576,19 @@ function App() {
           packetRate={deviceStats.packetRate}
           deviceId={deviceId}
         />
-        <main className="content-area">
-          {renderContent()}
+        <main
+          className="content-area"
+          style={activeTab === 'training' ? { overflow: 'hidden', padding: '14px 16px' } : undefined}
+        >
+          {/* TrainingView always mounted when connected — keeps background processing alive */}
+          {isConnected && (
+            <TrainingView
+              packets={latestPackets}
+              filterParams={filterParams}
+              hidden={activeTab !== 'training'}
+            />
+          )}
+          {activeTab !== 'training' && renderContent()}
         </main>
       </div>
 

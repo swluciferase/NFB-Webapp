@@ -964,6 +964,10 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
 
 const HISTORY_LEN = 60;
 
+// Difficulty levels: K constant for OO = K - 10*sqrt(AT)
+const K_VALUES = [36, 49, 62, 75, 88] as const; // 1=easiest … 5=hardest
+const DIFFICULTY_LABELS = ['很容易', '容易', '中等', '困難', '很困難'] as const;
+
 function makeDefaultIndicators(): EegIndicator[] {
   return Array.from({ length: 5 }, (_, i) => ({
     id: i + 1,
@@ -1045,6 +1049,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const [operatorNotes, setOperatorNotes] = useState('');
   const [overallScore, setOverallScore] = useState(0);
   const [overlayOpacity, setOverlayOpacity] = useState(0);
+  const [difficultyLevel, setDifficultyLevel] = useState(3); // 1–5
 
   const aboveCountRef = useRef(0);
   const totalCountRef = useRef(0);
@@ -1058,6 +1063,15 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const applyOverlay = useCallback((opacityPct: number) => {
     sendToFeedbackWindow({ type: 'nfb_overlay', opacity: 1 - opacityPct / 100 });
   }, [sendToFeedbackWindow]);
+
+  // Auto-compute overlay opacity from AT: OO = K - 10*sqrt(AT), clamped 0–100
+  useEffect(() => {
+    if (!sessionRunning) return;
+    const k = K_VALUES[difficultyLevel - 1]!;
+    const oo = Math.max(0, Math.min(100, Math.round(k - 10 * Math.sqrt(aboveThresholdPct))));
+    setOverlayOpacity(oo);
+    applyOverlay(oo);
+  }, [aboveThresholdPct, difficultyLevel, sessionRunning, applyOverlay]);
 
   // Lookup live band power via ref (avoids stale closure)
   const getLiveBandPower = useCallback((channel: Channel, band: Band): number | null => {
@@ -1202,11 +1216,6 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     setSessionRunning(false);
   }, []);
 
-  const handleOverlayChange = (val: number) => {
-    setOverlayOpacity(val);
-    applyOverlay(val);
-  };
-
   const oddIndicators = indicators.filter(i => i.id % 2 !== 0);
   const evenIndicators = indicators.filter(i => i.id % 2 === 0);
   const enabledIndicators = indicators.filter(i => i.enabled);
@@ -1286,20 +1295,41 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
       <div style={colStyle}>
 
         {/* Progress gauge + stats */}
-        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px', marginBottom: 10, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <ProgressGauge score={overallScore} />
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[
-              { label: 'Duration', value: formatDuration(sessionDuration) },
-              { label: 'Above Threshold', value: `${aboveThresholdPct}%` },
-              { label: 'Reward Rate', value: `${rewardRate}%` },
-              { label: 'Overlay Opacity', value: `${overlayOpacity}%` },
-            ].map(item => (
-              <div key={item.label} style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '7px 10px', textAlign: 'center' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>{item.label}</div>
-                <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, fontWeight: 600, color: '#dce9f8' }}>{item.value}</div>
-              </div>
-            ))}
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px', marginBottom: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+            <ProgressGauge score={overallScore} />
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {[
+                { label: 'Duration', value: formatDuration(sessionDuration) },
+                { label: 'Above Threshold', value: `${aboveThresholdPct}%` },
+                { label: 'Reward Rate', value: `${rewardRate}%` },
+                { label: 'Overlay Opacity', value: `${overlayOpacity}%` },
+              ].map(item => (
+                <div key={item.label} style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '7px 10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>{item.label}</div>
+                  <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, fontWeight: 600, color: '#dce9f8' }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Difficulty slider */}
+          <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '8px 10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>難易度</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#f9a02e', fontFamily: 'ui-monospace,monospace' }}>
+                Lv.{difficultyLevel} {DIFFICULTY_LABELS[difficultyLevel - 1]} &nbsp;
+                <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>K={K_VALUES[difficultyLevel - 1]}</span>
+              </span>
+            </div>
+            <input type="range" min={1} max={5} step={1} value={difficultyLevel}
+              onChange={e => setDifficultyLevel(parseInt(e.target.value))}
+              style={{ width: '100%', accentColor: '#f9a02e' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
+              <span>最容易</span><span>最困難</span>
+            </div>
+            <div style={{ fontSize: 10, color: 'rgba(140,160,185,0.6)', marginTop: 4, textAlign: 'center' }}>
+              OO = {K_VALUES[difficultyLevel - 1]} − 10√AT &nbsp;→&nbsp; <span style={{ color: '#58a6ff', fontFamily: 'ui-monospace,monospace' }}>{overlayOpacity}%</span>
+            </div>
           </div>
         </div>
 
@@ -1342,17 +1372,9 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           <input type="url" placeholder="Feedback URL (e.g. https://…)"
             value={feedbackUrl} onChange={e => setFeedbackUrl(e.target.value)}
             style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '6px 8px', marginBottom: 8, boxSizing: 'border-box' }} />
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>遮罩透明度</span>
-              <span style={{ fontSize: 11, color: '#58a6ff', fontFamily: 'ui-monospace,monospace' }}>{overlayOpacity}%</span>
-            </div>
-            <input type="range" min={0} max={100} value={overlayOpacity}
-              onChange={e => handleOverlayChange(parseInt(e.target.value))}
-              style={{ width: '100%', accentColor: '#58a6ff' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
-              <span>全黑</span><span>全透明</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-tertiary)', borderRadius: 6, padding: '6px 10px', marginBottom: 10 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>遮罩透明度（自動）</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#58a6ff', fontFamily: 'ui-monospace,monospace' }}>{overlayOpacity}%</span>
           </div>
           <div style={{
             width: '100%', height: 48,

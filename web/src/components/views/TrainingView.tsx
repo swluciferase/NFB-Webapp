@@ -11,7 +11,7 @@ type Band = 'Delta' | 'Theta' | 'Alpha' | 'SMR' | 'Beta' | 'Hi-Beta' | 'Gamma';
 type Direction = 'up' | 'down';
 type OscWaveform = 'sine' | 'square' | 'triangle' | 'sawtooth' | 'white-noise' | 'ocean-waves';
 type BnbMethod = 'global-ssb' | 'band-shift' | 'sub-layer';
-type ModTrend = 'up' | 'down' | 'random';
+type ModTrend = 'up' | 'down' | 'loop';
 
 const CHANNELS: Channel[] = [...CHANNEL_LABELS];
 const BANDS: Band[] = ['Delta', 'Theta', 'Alpha', 'SMR', 'Beta', 'Hi-Beta', 'Gamma'];
@@ -567,6 +567,7 @@ interface BnbState {
   modInterval: number;
   modStep: number;
   modTrend: ModTrend;
+  loopDir: 1 | -1;
 }
 
 const DEFAULT_BNB: BnbState = {
@@ -586,7 +587,8 @@ const DEFAULT_BNB: BnbState = {
   modEnabled: false,
   modInterval: 500,
   modStep: 0.5,
-  modTrend: 'random',
+  modTrend: 'loop',
+  loopDir: 1,
 };
 
 const BNB_BANDS: { label: string; sym: string; min: number; max: number }[] = [
@@ -729,7 +731,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
   const formatHz = (v: number) => v < 10 ? v.toFixed(2) : v.toFixed(1);
 
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.2)', borderRadius: 10, padding: '14px', flex: 1, overflowY: 'auto' }}>
+    <div style={{ flex: 1, padding: '4px 2px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <span style={{ fontWeight: 700, fontSize: 14, color: '#8ecfff' }}>BNB Controls</span>
         <Badge label="Binaural Beat" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
@@ -818,11 +820,18 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
 
       {/* Binaural Beat Frequency */}
       <div style={subHeaderStyle as React.CSSProperties}>Binaural Beat Frequency</div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, cursor: 'pointer' }}>
-        <input type="checkbox" checked={bnb.bbFixed} onChange={e => onChange({ bbFixed: e.target.checked })} style={{ accentColor: '#58a6ff' }} />
-        <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Fixed Frequency</span>
-      </label>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8, opacity: bnb.bbFixed ? 0.4 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', flex: 1 }}>
+          <input type="checkbox" checked={bnb.bbFixed} onChange={e => onChange({ bbFixed: e.target.checked })} style={{ accentColor: '#58a6ff' }} />
+          <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Fixed Frequency</span>
+        </label>
+        {bnb.bbFixed && (
+          <input type="number" min={0.5} max={100} step={0.5} value={bnb.bbCurrentHz}
+            onChange={e => onChange({ bbCurrentHz: parseFloat(e.target.value) || 8 })}
+            style={{ ...inputStyle, width: 70, textAlign: 'right' }} />
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8, opacity: bnb.bbFixed ? 0.35 : 1, pointerEvents: bnb.bbFixed ? 'none' : 'auto' }}>
         <div>
           <span style={labelStyle}>Min Hz</span>
           <input type="number" min={0.5} max={100} step={0.5} value={bnb.bbMinHz}
@@ -859,8 +868,18 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
           </button>
         ))}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, background: 'var(--bg-tertiary)', borderRadius: 6, padding: '7px 9px', marginBottom: 4 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, background: 'var(--bg-tertiary)', borderRadius: 6, padding: '7px 9px', marginBottom: 6 }}>
         {BNB_METHOD_DESC[bnb.bnbMethod]}
+      </div>
+      {/* Carrier freq presets */}
+      <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>Carrier Freq</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+        {[40, 100, 200, 432, 528, 440].map(hz => (
+          <button key={hz} onClick={() => onChange({ oscFreq: hz })}
+            style={{ padding: '3px 7px', borderRadius: 5, border: `1px solid ${bnb.oscFreq === hz ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: bnb.oscFreq === hz ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: bnb.oscFreq === hz ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            {hz} Hz
+          </button>
+        ))}
       </div>
 
       {/* Modulation */}
@@ -887,10 +906,10 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         <div>
           <span style={labelStyle}>Trend</span>
           <div style={{ display: 'flex', gap: 6 }}>
-            {(['up', 'down', 'random'] as ModTrend[]).map(t => (
+            {(['up', 'down', 'loop'] as ModTrend[]).map(t => (
               <button key={t} onClick={() => onChange({ modTrend: t })} disabled={!bnb.modEnabled}
                 style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: `1px solid ${bnb.modTrend === t ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: bnb.modTrend === t ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: bnb.modTrend === t ? '#8ecfff' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize' }}>
-                {t === 'up' ? '↑' : t === 'down' ? '↓' : '⇅'} {t}
+                {t === 'up' ? '↑' : t === 'down' ? '↓' : '↺'} {t}
               </button>
             ))}
           </div>
@@ -1055,12 +1074,16 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
         if (b.bbFixed) return b;
         const range = b.bbMaxHz - b.bbMinHz;
         if (range <= 0) return b;
-        let next = b.bbCurrentHz;
-        if (b.modEnabled) {
-          const step = b.modStep * (b.modTrend === 'up' ? 1 : b.modTrend === 'down' ? -1 : (Math.random() > 0.5 ? 1 : -1));
-          next = Math.max(b.bbMinHz, Math.min(b.bbMaxHz, b.bbCurrentHz + step * 0.1));
+        if (!b.modEnabled) return b;
+        if (b.modTrend === 'loop') {
+          let dir = b.loopDir;
+          let next = b.bbCurrentHz + b.modStep * dir * 0.1;
+          if (next >= b.bbMaxHz) { next = b.bbMaxHz; dir = -1; }
+          else if (next <= b.bbMinHz) { next = b.bbMinHz; dir = 1; }
+          return { ...b, bbCurrentHz: next, loopDir: dir };
         }
-        return { ...b, bbCurrentHz: next };
+        const step = b.modStep * (b.modTrend === 'up' ? 1 : -1);
+        return { ...b, bbCurrentHz: Math.max(b.bbMinHz, Math.min(b.bbMaxHz, b.bbCurrentHz + step * 0.1)) };
       });
 
       // Session stats
@@ -1147,7 +1170,13 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 
   const colStyle: React.CSSProperties = {
-    flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 0, overflowY: 'auto', paddingRight: 4,
+    flex: 1, minWidth: 0, minHeight: 0,
+    display: 'flex', flexDirection: 'column', gap: 0,
+    overflowY: 'auto',
+    background: 'rgba(7,13,24,0.7)',
+    border: '1px solid rgba(93,109,134,0.18)',
+    borderRadius: 10,
+    padding: '8px',
   };
   const sectionHeaderStyle: React.CSSProperties = {
     fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase',

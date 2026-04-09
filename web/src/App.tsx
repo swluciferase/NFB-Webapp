@@ -311,7 +311,7 @@ function App() {
       } catch { /* ignore */ }
     }, 300);
     return () => clearTimeout(t);
-  }, [status, getCommands]);
+  }, [status, getCommands, parser]);
 
   // ── Connection handlers ──
   const handleConnect = useCallback(() => {

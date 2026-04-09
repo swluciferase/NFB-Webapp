@@ -77,7 +77,7 @@ const HistCanvas: FC<{
   threshold: number;
   height?: number;
   onThresholdChange?: (delta: number) => void;
-}> = ({ history, threshold, height = 54, onThresholdChange }) => {
+}> = ({ history, threshold, height = 42, onThresholdChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(200);
@@ -205,7 +205,7 @@ const EegCard: FC<{
     color: 'var(--text-primary)', fontSize: 12, padding: '3px 6px', cursor: 'pointer', flex: 1,
   };
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, opacity: indicator.enabled ? 1 : 0.55 }}>
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', marginBottom: 6, opacity: indicator.enabled ? 1 : 0.55 }}>
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -340,7 +340,7 @@ const FormulaCard: FC<{
   const computedValue = isLive ? (evalFormula(indicator.formula, liveBandPower) ?? 0) : 0;
   const aboveThreshold = computedValue >= indicator.threshold;
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.25)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, opacity: indicator.enabled ? 1 : 0.55 }}>
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.25)', borderRadius: 10, padding: '10px 12px', marginBottom: 6, opacity: indicator.enabled ? 1 : 0.55 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -602,37 +602,35 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         <Badge label="Binaural Beat" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
       </div>
 
-      {/* Audio File */}
-      <div style={subHeaderStyle as React.CSSProperties}>Audio File</div>
-      <div
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
-        style={{
-          border: `1px dashed ${dragging ? '#58a6ff' : 'rgba(93,109,134,0.4)'}`,
-          borderRadius: 7, padding: '10px 8px', textAlign: 'center', cursor: 'pointer',
-          background: dragging ? 'rgba(88,166,255,0.07)' : 'var(--bg-tertiary)',
-          marginBottom: 6, transition: 'all 0.15s',
-        }}
-      >
-        <div style={{ fontSize: 12, color: bnb.audioFileName ? '#58a6ff' : 'var(--text-secondary)' }}>
-          {bnb.audioFileName || 'Drop WAV / MP3 here or click to browse'}
+      {/* Audio File + Playback on same row */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'stretch' }}>
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+          style={{
+            flex: 1, border: `1px dashed ${dragging ? '#58a6ff' : 'rgba(93,109,134,0.4)'}`,
+            borderRadius: 7, padding: '7px 8px', textAlign: 'center', cursor: 'pointer',
+            background: dragging ? 'rgba(88,166,255,0.07)' : 'var(--bg-tertiary)',
+            transition: 'all 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div style={{ fontSize: 11, color: bnb.audioFileName ? '#58a6ff' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+            {bnb.audioFileName || '+ Audio File'}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+          {([['▶', 'playing'], ['⏸', 'paused'], ['⏹', 'stopped']] as [string, BnbState['playState']][]).map(([icon, state]) => (
+            <button key={state} onClick={() => onChange({ playState: state })}
+              style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${bnb.playState === state ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: bnb.playState === state ? 'rgba(88,166,255,0.2)' : 'var(--bg-tertiary)', color: bnb.playState === state ? '#8ecfff' : 'var(--text-secondary)', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {icon}
+            </button>
+          ))}
         </div>
       </div>
       <input ref={fileInputRef} type="file" accept=".wav,.mp3,audio/*" style={{ display: 'none' }}
         onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-
-      {/* Playback */}
-      <div style={subHeaderStyle as React.CSSProperties}>Playback</div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-        {([['▶', 'playing'], ['⏸', 'paused'], ['⏹', 'stopped']] as [string, BnbState['playState']][]).map(([icon, state]) => (
-          <button key={state} onClick={() => onChange({ playState: state })}
-            style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: `1px solid ${bnb.playState === state ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: bnb.playState === state ? 'rgba(88,166,255,0.2)' : 'var(--bg-tertiary)', color: bnb.playState === state ? '#8ecfff' : 'var(--text-secondary)', fontSize: 14, cursor: 'pointer' }}>
-            {icon}
-          </button>
-        ))}
-      </div>
       <div style={{ marginBottom: 6 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'ui-monospace,monospace' }}>
@@ -1035,7 +1033,6 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
 
       {/* ── Column 1: EEG odd (#1 #3 #5) ── */}
       <div style={colStyle}>
-        <div style={sectionHeaderStyle}>EEG NFB #1 #3 #5</div>
         {oddIndicators.map(ind => ind.id === 5 ? (
           <FormulaCard
             key={ind.id}
@@ -1055,7 +1052,6 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
 
       {/* ── Column 2: EEG even (#2 #4) + Cardiac ── */}
       <div style={colStyle}>
-        <div style={sectionHeaderStyle}>EEG NFB #2 #4 + Cardiac</div>
         {evenIndicators.map(ind => (
           <EegCard key={ind.id} indicator={ind} isLive={isLive} {...eegCardHandlers} />
         ))}
@@ -1073,18 +1069,16 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
 
       {/* ── Column 3: BNB Controls ── */}
       <div style={colStyle}>
-        <div style={sectionHeaderStyle}>BNB Controls</div>
         <BnbColumn bnb={bnb} onChange={patch => setBnb(prev => ({ ...prev, ...patch }))} />
       </div>
 
       {/* ── Column 4: Session Summary ── */}
       <div style={colStyle}>
-        <div style={sectionHeaderStyle}>Session Summary</div>
 
         {/* Progress gauge + stats */}
-        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px', marginBottom: 10, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px', marginBottom: 10, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <ProgressGauge score={overallScore} />
-          <div style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
               { label: 'Duration', value: formatDuration(sessionDuration) },
               { label: 'Above Threshold', value: `${aboveThresholdPct}%` },

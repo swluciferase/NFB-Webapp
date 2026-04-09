@@ -11,7 +11,7 @@ const translations: Record<string, Record<Lang, string>> = {
   error: { zh: '連接錯誤', en: 'Connection Error' },
 
   // Nav tabs
-  tabHome: { zh: '首頁', en: 'Home' },
+  tabHome: { zh: '連線', en: 'Connect' },
   tabImpedance: { zh: '阻抗', en: 'Impedance' },
   tabSignal: { zh: '訊號', en: 'Signal' },
   tabFft: { zh: '頻譜', en: 'FFT' },
@@ -147,7 +147,7 @@ const translations: Record<string, Record<Lang, string>> = {
   sidebarSampleRate:   { zh: '採樣率', en: 'Sample Rate' },
   sidebarPacketRate:   { zh: '封包率', en: 'Packet Rate' },
   sidebarSerial:       { zh: '序號', en: 'Serial' },
-  sidebarExternalHome: { zh: '主站', en: 'Website' },
+  sidebarExternalHome: { zh: '首頁', en: 'Website' },
 
   // Quality monitor (RecordView)
   recordTargetDuration: { zh: '目標時長', en: 'Target Duration' },

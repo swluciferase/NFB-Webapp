@@ -40,7 +40,7 @@ const PRESET_OPTIONS: PresetOption[] = [
     value: 'tbr',
     label: '① 注意力提升 (TBR)（Fz）',
     info: '這是 ADHD 訓練最常用的指標，值越高代表專注度越高。\n算式：Fz_Beta / Fz_Theta',
-    formula: 'Fz_Beta / Fz_Theta',
+    formula: 'Fz_Beta / (Fz_Theta + 0.001)',
     direction: 'up',
   },
   {
@@ -75,7 +75,7 @@ const PRESET_OPTIONS: PresetOption[] = [
     value: 'theta_alpha',
     label: '⑥ 創造力/內省 (T/A)（Pz）',
     info: '訓練進入 Theta 與 Alpha 的交界，常見於深度冥想或藝術創作訓練。\n算式：Pz_Theta / Pz_Alpha',
-    formula: 'Pz_Theta / Pz_Alpha',
+    formula: 'Pz_Theta / (Pz_Alpha + 0.001)',
     direction: 'up',
   },
   {
@@ -1184,6 +1184,14 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const pptxInputRef  = useRef<HTMLInputElement | null>(null);
   const pdfInputRef   = useRef<HTMLInputElement | null>(null);
 
+  // ── Baseline recording ──
+  const [baselinePhase, setBaselinePhase] = useState<'idle' | 'recording' | 'done'>('idle');
+  const [baselineProgress, setBaselineProgress] = useState(0); // 0–30
+  const baselinePhaseRef = useRef<'idle' | 'recording' | 'done'>('idle');
+  useEffect(() => { baselinePhaseRef.current = baselinePhase; }, [baselinePhase]);
+  // Each entry: liveBandPower snapshot + A1–A9 raw formula values
+  const baselineRecordRef = useRef<Array<{ bands: number[][]; presets: (number | null)[] }>>([]);
+
   // NFB audio feedback
   const [nfbAudioEnabled, setNfbAudioEnabled] = useState(false);
   const [nfbAudioSrc, setNfbAudioSrc] = useState<{ url: string; name: string } | null>(null);
@@ -1234,13 +1242,36 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Baseline recording: snapshot raw liveBandPower + all A1–A9 formula values
+      if (baselinePhaseRef.current === 'recording') {
+        const bp = liveBandPowerRef.current;
+        const presetVals = PRESET_OPTIONS.slice(1).map(p => evalFormula(p.formula, bp));
+        baselineRecordRef.current.push({
+          bands: bp ? bp.map(row => [...row]) : [],
+          presets: presetVals,
+        });
+        const n = baselineRecordRef.current.length;
+        setBaselineProgress(n);
+        if (n >= 30) {
+          baselinePhaseRef.current = 'done';
+          setBaselinePhase('done');
+        }
+      }
+
       // EEG indicators — only update when live data available
       setIndicators(prev => prev.map(ind => {
         if (!ind.enabled) return ind;
         let newVal: number;
         if (ind.formula) {
-          // Formula evaluation: used by id=5 (FormulaCard) and preset formulas for #1–4
-          newVal = evalFormula(ind.formula, liveBandPowerRef.current) ?? ind.value;
+          // Formula evaluation: id=5 FormulaCard + preset formulas for #1–4
+          const rawVal = evalFormula(ind.formula, liveBandPowerRef.current) ?? ind.value;
+          // Preset formulas: apply 5-sample moving average (window=5, overlap=4)
+          if (ind.presetKey) {
+            const maWin = [...ind.history.slice(-4), rawVal];
+            newVal = maWin.reduce((a, b) => a + b, 0) / maWin.length;
+          } else {
+            newVal = rawVal;
+          }
         } else {
           const live = getLiveBandPower(ind.channel, ind.band);
           if (live === null) {
@@ -1399,6 +1430,67 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     };
     reader.readAsArrayBuffer(file);
   }, [applyOverlay, overlayOpacity]);
+
+  // Compute trimmed-mean baseline threshold from 30 raw samples
+  const computeAndApplyBaseline = useCallback(() => {
+    const data = baselineRecordRef.current;
+    if (data.length < 6) return;
+
+    function trimmedMean(vals: (number | null)[]): number | null {
+      const valid = vals.filter((v): v is number => v !== null && isFinite(v) && v >= 0);
+      if (valid.length < 2) return null;
+      // 2-second non-overlapping windows → means
+      const windowMeans: number[] = [];
+      for (let i = 0; i + 1 < valid.length; i += 2) {
+        windowMeans.push((valid[i]! + valid[i + 1]!) / 2);
+      }
+      if (windowMeans.length < 1) return null;
+      const sorted = [...windowMeans].sort((a, b) => a - b);
+      // Remove up to 3 from each end (only if enough windows)
+      const trim = Math.min(3, Math.floor(sorted.length / 3));
+      const trimmed = sorted.slice(trim, sorted.length - trim);
+      if (trimmed.length === 0) return null;
+      return trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+    }
+
+    setIndicators(prev => prev.map(ind => {
+      if (ind.id === 5) return ind; // custom FormulaCard — skip
+      let threshold: number | null = null;
+
+      if (ind.presetKey) {
+        const presetIdx = PRESET_OPTIONS.findIndex(p => p.value === ind.presetKey) - 1;
+        if (presetIdx >= 0) {
+          threshold = trimmedMean(data.map(d => d.presets[presetIdx] ?? null));
+        }
+      } else {
+        const chIdx = CHANNEL_LABELS.indexOf(ind.channel as typeof CHANNEL_LABELS[number]);
+        const bandIdx = NFB_BANDS.findIndex(b => b.name === ind.band);
+        if (chIdx >= 0 && bandIdx >= 0) {
+          threshold = trimmedMean(data.map(d => d.bands[chIdx]?.[bandIdx] ?? null));
+        }
+      }
+
+      if (threshold !== null && threshold > 0) {
+        return { ...ind, threshold, autoThreshold: false };
+      }
+      return ind;
+    }));
+  }, []);
+
+  const handleBaseline = useCallback(() => {
+    if (baselinePhase === 'recording') return;
+    baselineRecordRef.current = [];
+    setBaselineProgress(0);
+    baselinePhaseRef.current = 'recording';
+    setBaselinePhase('recording');
+  }, [baselinePhase]);
+
+  // Apply baseline thresholds once recording completes
+  useEffect(() => {
+    if (baselinePhase === 'done') {
+      computeAndApplyBaseline();
+    }
+  }, [baselinePhase, computeAndApplyBaseline]);
 
   const handleStartSession = useCallback(() => {
     sessionHistoryRef.current = []; // reset session-specific history
@@ -1713,18 +1805,43 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               </div>
             )}
           </div>
-          <button
-            onClick={sessionRunning ? handleStopSession : handleStartSession}
-            style={{
-              width: '100%', padding: '8px 0', borderRadius: 7, border: 'none',
-              background: sessionRunning
-                ? 'linear-gradient(90deg, rgba(248,81,73,0.7), rgba(200,50,50,0.6))'
-                : 'linear-gradient(90deg, rgba(88,166,255,0.7), rgba(40,100,200,0.6))',
-              color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em',
-            }}
-          >
-            {sessionRunning ? '⏹ Stop NFB Session' : '▶ Start NFB Session'}
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {/* Baseline button */}
+            <button
+              onClick={handleBaseline}
+              disabled={baselinePhase === 'recording'}
+              style={{
+                flex: '0 0 auto', padding: '8px 10px', borderRadius: 7, border: 'none', cursor: baselinePhase === 'recording' ? 'default' : 'pointer',
+                background: baselinePhase === 'recording'
+                  ? 'rgba(248,129,74,0.25)'
+                  : baselinePhase === 'done'
+                    ? 'rgba(63,185,80,0.25)'
+                    : 'rgba(93,109,134,0.3)',
+                color: baselinePhase === 'recording' ? 'rgba(248,129,74,0.9)' : baselinePhase === 'done' ? '#3fb950' : 'var(--text-secondary)',
+                fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+                border: `1px solid ${baselinePhase === 'recording' ? 'rgba(248,129,74,0.4)' : baselinePhase === 'done' ? 'rgba(63,185,80,0.4)' : 'var(--border)'}`,
+              }}
+            >
+              {baselinePhase === 'recording'
+                ? `● ${30 - baselineProgress}s`
+                : baselinePhase === 'done'
+                  ? '✓ Baseline'
+                  : 'Baseline'}
+            </button>
+            {/* Start / Stop session button */}
+            <button
+              onClick={sessionRunning ? handleStopSession : handleStartSession}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 7, border: 'none',
+                background: sessionRunning
+                  ? 'linear-gradient(90deg, rgba(248,81,73,0.7), rgba(200,50,50,0.6))'
+                  : 'linear-gradient(90deg, rgba(88,166,255,0.7), rgba(40,100,200,0.6))',
+                color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em',
+              }}
+            >
+              {sessionRunning ? '⏹ Stop NFB Session' : '▶ Start NFB Session'}
+            </button>
+          </div>
         </div>
 
         {/* Operator notes */}

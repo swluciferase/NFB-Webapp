@@ -141,6 +141,14 @@ const translations: Record<string, Record<Lang, string>> = {
   sidebarImpedanceActiveHint: { zh: '阻抗量測進行中，請先停止量測', en: 'Impedance active — stop measurement first' },
   sidebarSignalActiveHint: { zh: '訊號/頻譜檢視中，請先切換至阻抗頁面', en: 'Signal/FFT active — navigate away first' },
 
+  // Sidebar sections & device info footer
+  sidebarSectionMain:  { zh: '主功能', en: 'Main' },
+  sidebarDeviceInfo:   { zh: '裝置資訊', en: 'Device' },
+  sidebarSampleRate:   { zh: '採樣率', en: 'Sample Rate' },
+  sidebarPacketRate:   { zh: '封包率', en: 'Packet Rate' },
+  sidebarSerial:       { zh: '序號', en: 'Serial' },
+  sidebarExternalHome: { zh: '主站', en: 'Website' },
+
   // Quality monitor (RecordView)
   recordTargetDuration: { zh: '目標時長', en: 'Target Duration' },
   recordDurationManual: { zh: '手動', en: 'Manual' },

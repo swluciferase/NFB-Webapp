@@ -131,7 +131,7 @@ export const Sidebar: FC<SidebarProps> = ({
           <span style={{ color: 'rgba(130,155,190,0.6)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             <HomeIcon />
           </span>
-          <span>{T(lang, 'tabHome')}</span>
+          <span>{T(lang, 'sidebarExternalHome')}</span>
         </a>
 
         {tabs.map((tab) => {

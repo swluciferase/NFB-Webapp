@@ -29,7 +29,6 @@ export interface RecordViewProps {
   startTime: Date | null;
   onEventMarker: (marker: { id: string; time: number; label: string }) => void;
   eventMarkers: { id: string; time: number; label: string }[];
-  onClearEventMarkers: () => void;
   // Quality monitor props
   qualityConfig: QualityConfig;
   onQualityConfigChange: (config: QualityConfig) => void;
@@ -87,7 +86,6 @@ export const RecordView: FC<RecordViewProps> = ({
   startTime,
   onEventMarker,
   eventMarkers,
-  onClearEventMarkers,
   qualityConfig,
   onQualityConfigChange,
   currentWindowStds,
@@ -819,7 +817,8 @@ export const RecordView: FC<RecordViewProps> = ({
         )}
       </div>
 
-      {/* File report card */}
+      {/* File report card — removed per product spec */}
+      {false && (
       <div style={{
         background: 'rgba(8,17,30,0.85)',
         border: '1px solid rgba(93,109,134,0.3)',
@@ -949,60 +948,7 @@ export const RecordView: FC<RecordViewProps> = ({
           {T(lang, 'recordFromFileHint')} · {T(lang, 'recordArtifactRemoval')}: {useArtifactRemoval ? '✓' : '✗'}
         </p>
       </div>
-
-      {/* Event markers log */}
-      <div style={{
-        background: 'rgba(8,17,30,0.85)',
-        border: '1px solid rgba(93,109,134,0.25)',
-        borderRadius: 12,
-        padding: '14px 18px',
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 13, color: 'rgba(240,230,80,0.9)' }}>
-            {T(lang, 'recordMarkerLog')}
-          </h3>
-          <button
-            onClick={onClearEventMarkers}
-            style={{
-              background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: 'rgba(200,210,230,0.6)',
-              borderRadius: 4, cursor: 'pointer',
-              fontSize: 11, padding: '3px 8px',
-            }}
-          >
-            {T(lang, 'recordClearMarkers')}
-          </button>
-        </div>
-
-        {eventMarkers.length === 0 ? (
-          <div style={{ color: 'rgba(130,150,175,0.45)', fontSize: 12, padding: '4px 0' }}>
-            {T(lang, 'recordNoMarkers')}
-          </div>
-        ) : (
-          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-            <table style={{ width: '100%', fontSize: 12, textAlign: 'left', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(93,109,134,0.3)' }}>
-                  <th style={{ padding: '4px 8px 8px 0', color: 'rgba(140,160,190,0.6)', fontWeight: 500 }}>ID</th>
-                  <th style={{ padding: '4px 8px 8px', color: 'rgba(140,160,190,0.6)', fontWeight: 500 }}>Label</th>
-                  <th style={{ padding: '4px 0 8px', color: 'rgba(140,160,190,0.6)', fontWeight: 500 }}>Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {eventMarkers.map((m, idx) => (
-                  <tr key={m.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '5px 8px 5px 0', color: 'rgba(120,140,170,0.7)' }}>{idx + 1}</td>
-                    <td style={{ padding: '5px 8px', color: 'rgba(240,230,80,0.9)' }}>{m.label}</td>
-                    <td style={{ padding: '5px 0', color: 'rgba(200,215,235,0.8)' }}>{formatTime(m.time)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };

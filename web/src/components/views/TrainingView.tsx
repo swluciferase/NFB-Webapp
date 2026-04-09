@@ -6,7 +6,6 @@ import { DEFAULT_FILTER_PARAMS } from '../../types/eeg';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-// Channel type matches actual hardware channel labels
 type Channel = typeof CHANNEL_LABELS[number];
 type Band = 'Delta' | 'Theta' | 'Alpha' | 'SMR' | 'Beta' | 'Hi-Beta' | 'Gamma';
 type Direction = 'up' | 'down';
@@ -14,7 +13,6 @@ type OscWaveform = 'sine' | 'square' | 'triangle' | 'sawtooth';
 type BnbMethod = 'global-ssb' | 'band-shift' | 'sub-layer';
 type ModTrend = 'up' | 'down' | 'random';
 
-// Hardware channels: Fp1 Fp2 T7 T8 O1 O2 Fz Pz
 const CHANNELS: Channel[] = [...CHANNEL_LABELS];
 const BANDS: Band[] = ['Delta', 'Theta', 'Alpha', 'SMR', 'Beta', 'Hi-Beta', 'Gamma'];
 
@@ -28,6 +26,18 @@ const BNB_METHOD_DESC: Record<BnbMethod, string> = {
   'sub-layer': 'Carrier hidden below audible range; beat modulates amplitude envelope.',
 };
 
+// 7 preset indicators (UI only, logic to be added later)
+const PRESET_OPTIONS = [
+  { value: '', label: '— 選擇預設 —' },
+  { value: 'alpha_enhance',   label: '①  Alpha 增強 (Fz, α↑)' },
+  { value: 'smr_enhance',     label: '②  SMR 增強 (Pz, SMR↑)' },
+  { value: 'theta_suppress',  label: '③  Theta 抑制 (Fz, θ↓)' },
+  { value: 'beta_enhance',    label: '④  Beta 增強 (Fp1, β↑)' },
+  { value: 'hibeta_suppress', label: '⑤  Hi-Beta 抑制 (Fp1, HB↓)' },
+  { value: 'gamma_enhance',   label: '⑥  Gamma 增強 (T8, γ↑)' },
+  { value: 'delta_suppress',  label: '⑦  Delta 抑制 (Fz, δ↓)' },
+];
+
 interface EegIndicator {
   id: number;
   enabled: boolean;
@@ -36,26 +46,19 @@ interface EegIndicator {
   direction: Direction;
   value: number;
   threshold: number;
+  autoThreshold: boolean;
   history: number[];
+  formula: string;   // used by id=5 custom index
 }
 
 interface CardiacState {
+  enabled: boolean;
   lfValue: number;
   hfValue: number;
   lfHfRatio: number;
   direction: Direction;
   threshold: number;
   history: number[];
-}
-
-// ── Simulation helpers ─────────────────────────────────────────────────────
-
-function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
-
-function randomDrift(current: number, base: number, speed: number): number {
-  const noise = (Math.random() - 0.5) * base * 0.3 * speed;
-  const pull = (base - current) * 0.05;
-  return Math.max(0.5, current + noise + pull);
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
@@ -67,10 +70,32 @@ const Badge: FC<{ label: string; color: string; bg: string }> = ({ label, color,
   }}>{label}</span>
 );
 
-const HistCanvas: FC<{ history: number[]; threshold: number; width?: number; height?: number }> = ({
-  history, threshold, width = 180, height = 54,
-}) => {
+// ── HistCanvas — fills container width, drag Y to adjust threshold ──────────
+
+const HistCanvas: FC<{
+  history: number[];
+  threshold: number;
+  height?: number;
+  onThresholdChange?: (delta: number) => void;
+}> = ({ history, threshold, height = 54, onThresholdChange }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [canvasWidth, setCanvasWidth] = useState(200);
+  const dragRef = useRef<{ startY: number; startThresh: number; max: number } | null>(null);
+
+  // Observe container width
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width ?? 200;
+      setCanvasWidth(Math.floor(w));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Draw
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -84,14 +109,56 @@ const HistCanvas: FC<{ history: number[]; threshold: number; width?: number; hei
     history.forEach((v, i) => {
       const barH = Math.round((v / max) * (h - 4));
       ctx.fillStyle = v >= threshold ? 'rgba(63,185,80,0.75)' : 'rgba(88,166,255,0.55)';
-      ctx.fillRect(i * barW, h - barH, barW - 1, barH);
+      ctx.fillRect(i * barW, h - barH, Math.max(1, barW - 1), barH);
     });
     const ty = Math.round(h - (threshold / max) * (h - 4));
-    ctx.strokeStyle = 'rgba(248,129,74,0.85)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = 'rgba(248,129,74,0.85)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(w, ty); ctx.stroke(); ctx.setLineDash([]);
-  }, [history, threshold]);
-  const evenWidth = width % 2 === 0 ? width : width - 1;
-  return <canvas ref={canvasRef} width={evenWidth} height={height} style={{ width: evenWidth, height, display: 'block', borderRadius: 4 }} />;
+  }, [history, threshold, canvasWidth]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!onThresholdChange) return;
+    const max = Math.max(...history, threshold * 1.1, 1);
+    dragRef.current = { startY: e.clientY, startThresh: threshold, max };
+    (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+  }, [history, threshold, onThresholdChange]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!dragRef.current || !onThresholdChange) return;
+    const { startY, startThresh, max } = dragRef.current;
+    const dy = e.clientY - startY;
+    // drag up = decrease Y = increase threshold
+    const delta = -dy * max / (height - 4);
+    const newThresh = Math.max(0.5, startThresh + delta);
+    onThresholdChange(newThresh - threshold);
+  }, [onThresholdChange, threshold, height]);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  return (
+    <div ref={containerRef} style={{ width: '100%' }}>
+      <canvas
+        ref={canvasRef}
+        width={canvasWidth}
+        height={height}
+        style={{
+          width: '100%', height, display: 'block', borderRadius: 4,
+          cursor: onThresholdChange ? 'ns-resize' : 'default',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+      />
+      {onThresholdChange && (
+        <div style={{ fontSize: 10, color: 'rgba(248,129,74,0.55)', textAlign: 'center', marginTop: 2, userSelect: 'none' }}>
+          ↕ 拖曳調整 threshold
+        </div>
+      )}
+    </div>
+  );
 };
 
 const LineCanvas: FC<{ history: number[]; threshold: number; color?: string }> = ({
@@ -122,22 +189,16 @@ const LineCanvas: FC<{ history: number[]; threshold: number; color?: string }> =
   return <canvas ref={canvasRef} width={178} height={50} style={{ width: 178, height: 50, display: 'block', borderRadius: 4 }} />;
 };
 
-const threshBtnStyle: React.CSSProperties = {
-  width: 28, height: 24,
-  background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5,
-  color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
-};
-
 const EegCard: FC<{
   indicator: EegIndicator;
-  isLive: boolean;          // true = real EEG data; false = simulation
+  isLive: boolean;
   onToggle: (id: number) => void;
   onChannelChange: (id: number, ch: Channel) => void;
   onBandChange: (id: number, b: Band) => void;
   onDirectionChange: (id: number, d: Direction) => void;
   onThresholdChange: (id: number, delta: number) => void;
-}> = ({ indicator, isLive, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange }) => {
+  onAutoThresholdToggle: (id: number) => void;
+}> = ({ indicator, isLive, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle }) => {
   const aboveThreshold = indicator.value >= indicator.threshold;
   const selectStyle: React.CSSProperties = {
     background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5,
@@ -145,17 +206,33 @@ const EegCard: FC<{
   };
   return (
     <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, opacity: indicator.enabled ? 1 : 0.55 }}>
+      {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>EEG #{indicator.id}</span>
           {isLive
             ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
-            : <Badge label="SIM" color="rgba(130,150,180,0.7)" bg="rgba(93,109,134,0.12)" />}
+            : <Badge label="—" color="rgba(130,150,180,0.5)" bg="rgba(93,109,134,0.10)" />}
         </div>
         <button onClick={() => onToggle(indicator.id)} style={{ background: indicator.enabled ? 'rgba(63,185,80,0.2)' : 'rgba(100,115,135,0.2)', border: `1px solid ${indicator.enabled ? 'rgba(63,185,80,0.5)' : 'rgba(100,115,135,0.4)'}`, borderRadius: 5, color: indicator.enabled ? '#3fb950' : '#6b7580', fontSize: 11, fontWeight: 600, padding: '2px 8px', cursor: 'pointer' }}>
           {indicator.enabled ? 'ON' : 'OFF'}
         </button>
       </div>
+
+      {/* Preset dropdown */}
+      <div style={{ marginBottom: 8 }}>
+        <select
+          defaultValue=""
+          onChange={() => { /* TODO: apply preset */ }}
+          style={{ ...selectStyle, width: '100%', flex: 'unset' }}
+        >
+          {PRESET_OPTIONS.map(p => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Channel + Band selectors */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
         <select value={indicator.channel} onChange={e => onChannelChange(indicator.id, e.target.value as Channel)} style={selectStyle}>
           {CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
@@ -164,6 +241,8 @@ const EegCard: FC<{
           {BANDS.map(b => <option key={b} value={b}>{b}</option>)}
         </select>
       </div>
+
+      {/* Direction */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
         {(['up', 'down'] as Direction[]).map(d => (
           <button key={d} onClick={() => onDirectionChange(indicator.id, d)} style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: `1px solid ${indicator.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.6)' : 'rgba(248,81,73,0.6)') : 'var(--border)'}`, background: indicator.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)') : 'var(--bg-tertiary)', color: indicator.direction === d ? (d === 'up' ? '#3fb950' : '#f85149') : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -171,46 +250,206 @@ const EegCard: FC<{
           </button>
         ))}
       </div>
+
+      {/* Value display */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : '#dce9f8', fontWeight: 600 }}>
-          {indicator.value.toFixed(2)} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>μV²</span>
+        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
+          {isLive ? indicator.value.toFixed(2) : '—'} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>μV²</span>
         </span>
         <Badge label={aboveThreshold ? (indicator.direction === 'up' ? 'ON' : 'OFF') : (indicator.direction === 'up' ? 'OFF' : 'ON')} color={aboveThreshold ? '#3fb950' : '#f85149'} bg={aboveThreshold ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
-      <div style={{ marginBottom: 8 }}>
-        <HistCanvas history={indicator.history} threshold={indicator.threshold} width={180} height={52} />
+
+      {/* Histogram — drag Y to adjust threshold */}
+      <div style={{ marginBottom: 4 }}>
+        <HistCanvas
+          history={indicator.history}
+          threshold={indicator.threshold}
+          onThresholdChange={indicator.autoThreshold ? undefined : (delta) => onThresholdChange(indicator.id, delta)}
+        />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <button onClick={() => onThresholdChange(indicator.id, -1)} style={threshBtnStyle}>−</button>
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'rgba(248,129,74,0.9)', fontFamily: 'ui-monospace,monospace' }}>{indicator.threshold.toFixed(1)} μV²</span>
-        <button onClick={() => onThresholdChange(indicator.id, 1)} style={threshBtnStyle}>+</button>
+
+      {/* Threshold display + Auto toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 12, color: indicator.autoThreshold ? 'rgba(88,166,255,0.7)' : 'rgba(248,129,74,0.9)', fontFamily: 'ui-monospace,monospace' }}>
+          {indicator.autoThreshold ? 'AUTO' : `${indicator.threshold.toFixed(1)} μV²`}
+        </span>
+        <button
+          onClick={() => onAutoThresholdToggle(indicator.id)}
+          style={{
+            fontSize: 10, padding: '2px 7px', borderRadius: 4,
+            border: `1px solid ${indicator.autoThreshold ? 'rgba(88,166,255,0.5)' : 'rgba(93,109,134,0.4)'}`,
+            background: indicator.autoThreshold ? 'rgba(88,166,255,0.15)' : 'var(--bg-tertiary)',
+            color: indicator.autoThreshold ? '#58a6ff' : 'var(--text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          AUTO
+        </button>
       </div>
     </div>
   );
 };
 
-// Cardiac card — badge fixed to VisioMynd
+// ── FormulaCard — EEG #5 custom index ──────────────────────────────────────
+
+function evalFormula(formula: string, liveBandPower: number[][] | null): number | null {
+  if (!liveBandPower || !formula.trim()) return null;
+  // Tokenize: replace Ch_Band with values, then eval arithmetic
+  const chNames = [...CHANNEL_LABELS];
+  const bandNames = ['Delta', 'Theta', 'Alpha', 'SMR', 'Beta', 'HiBeta', 'Gamma'];
+  const bandNameMap: Record<string, string> = {
+    Delta: 'Delta', Theta: 'Theta', Alpha: 'Alpha', SMR: 'SMR',
+    Beta: 'Beta', HiBeta: 'Hi-Beta', Gamma: 'Gamma',
+  };
+  // Build substitution map
+  let expr = formula;
+  for (const ch of chNames) {
+    for (const bKey of bandNames) {
+      const token = `${ch}_${bKey}`;
+      if (expr.includes(token)) {
+        const chIdx = chNames.indexOf(ch);
+        const bName = bandNameMap[bKey]!;
+        const bandIdx = NFB_BANDS.findIndex(b => b.name === bName);
+        const val = (chIdx >= 0 && bandIdx >= 0) ? (liveBandPower[chIdx]?.[bandIdx] ?? 0) : 0;
+        // Replace all occurrences
+        expr = expr.split(token).join(String(val));
+      }
+    }
+  }
+  // Safety: only allow numbers, operators, parens, spaces, dots
+  if (!/^[\d\s+\-*/().]+$/.test(expr)) return null;
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = new Function(`return (${expr})`)() as number;
+    return isFinite(result) ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+const FormulaCard: FC<{
+  indicator: EegIndicator;
+  isLive: boolean;
+  liveBandPower: number[][] | null;
+  onToggle: (id: number) => void;
+  onFormulaChange: (id: number, formula: string) => void;
+  onThresholdChange: (id: number, delta: number) => void;
+  onAutoThresholdToggle: (id: number) => void;
+  onDirectionChange: (id: number, d: Direction) => void;
+}> = ({ indicator, isLive, liveBandPower, onToggle, onFormulaChange, onThresholdChange, onAutoThresholdToggle, onDirectionChange }) => {
+  const computedValue = isLive ? (evalFormula(indicator.formula, liveBandPower) ?? 0) : 0;
+  const aboveThreshold = computedValue >= indicator.threshold;
+  return (
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.25)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, opacity: indicator.enabled ? 1 : 0.55 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>EEG #5 <span style={{ color: 'rgba(88,166,255,0.6)', fontWeight: 400, fontSize: 11 }}>自定義指標</span></span>
+          {isLive
+            ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
+            : <Badge label="—" color="rgba(130,150,180,0.5)" bg="rgba(93,109,134,0.10)" />}
+        </div>
+        <button onClick={() => onToggle(indicator.id)} style={{ background: indicator.enabled ? 'rgba(63,185,80,0.2)' : 'rgba(100,115,135,0.2)', border: `1px solid ${indicator.enabled ? 'rgba(63,185,80,0.5)' : 'rgba(100,115,135,0.4)'}`, borderRadius: 5, color: indicator.enabled ? '#3fb950' : '#6b7580', fontSize: 11, fontWeight: 600, padding: '2px 8px', cursor: 'pointer' }}>
+          {indicator.enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+
+      {/* Formula input */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>
+          公式 (e.g. <code style={{ color: 'rgba(88,166,255,0.7)' }}>Fp1_Alpha / (Fp1_Alpha + Fp2_Theta)</code>)
+        </div>
+        <input
+          type="text"
+          value={indicator.formula}
+          onChange={e => onFormulaChange(indicator.id, e.target.value)}
+          placeholder="輸入公式…"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+            borderRadius: 5, color: 'var(--text-primary)',
+            fontSize: 12, padding: '5px 8px', fontFamily: 'ui-monospace,monospace',
+          }}
+        />
+        <div style={{ fontSize: 10, color: 'rgba(93,109,134,0.6)', marginTop: 3 }}>
+          頻道: Fp1 Fp2 T7 T8 O1 O2 Fz Pz &nbsp;·&nbsp; 頻帶: Delta Theta Alpha SMR Beta HiBeta Gamma
+        </div>
+      </div>
+
+      {/* Direction */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {(['up', 'down'] as Direction[]).map(d => (
+          <button key={d} onClick={() => onDirectionChange(indicator.id, d)} style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: `1px solid ${indicator.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.6)' : 'rgba(248,81,73,0.6)') : 'var(--border)'}`, background: indicator.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)') : 'var(--bg-tertiary)', color: indicator.direction === d ? (d === 'up' ? '#3fb950' : '#f85149') : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            {d === 'up' ? '↑ Up' : '↓ Down'}
+          </button>
+        ))}
+      </div>
+
+      {/* Value */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
+          {isLive ? computedValue.toFixed(3) : '—'}
+        </span>
+        <Badge label={aboveThreshold ? (indicator.direction === 'up' ? 'ON' : 'OFF') : (indicator.direction === 'up' ? 'OFF' : 'ON')} color={aboveThreshold ? '#3fb950' : '#f85149'} bg={aboveThreshold ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
+      </div>
+
+      {/* Histogram */}
+      <div style={{ marginBottom: 4 }}>
+        <HistCanvas
+          history={indicator.history}
+          threshold={indicator.threshold}
+          onThresholdChange={indicator.autoThreshold ? undefined : (delta) => onThresholdChange(indicator.id, delta)}
+        />
+      </div>
+
+      {/* Threshold + Auto */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 12, color: indicator.autoThreshold ? 'rgba(88,166,255,0.7)' : 'rgba(248,129,74,0.9)', fontFamily: 'ui-monospace,monospace' }}>
+          {indicator.autoThreshold ? 'AUTO' : indicator.threshold.toFixed(3)}
+        </span>
+        <button
+          onClick={() => onAutoThresholdToggle(indicator.id)}
+          style={{
+            fontSize: 10, padding: '2px 7px', borderRadius: 4,
+            border: `1px solid ${indicator.autoThreshold ? 'rgba(88,166,255,0.5)' : 'rgba(93,109,134,0.4)'}`,
+            background: indicator.autoThreshold ? 'rgba(88,166,255,0.15)' : 'var(--bg-tertiary)',
+            color: indicator.autoThreshold ? '#58a6ff' : 'var(--text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          AUTO
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Cardiac card
 const CardiacCard: FC<{
   state: CardiacState;
   isLive: boolean;
   liveHr: number | null;
   liveBreathing: number | null;
+  onToggle: () => void;
   onDirectionChange: (d: Direction) => void;
   onThresholdChange: (delta: number) => void;
   onOpenVisioMynd: () => void;
-}> = ({ state, isLive, liveHr, liveBreathing, onDirectionChange, onThresholdChange, onOpenVisioMynd }) => {
+}> = ({ state, isLive, liveHr, liveBreathing, onToggle, onDirectionChange, onThresholdChange, onOpenVisioMynd }) => {
   const ratio = state.lfHfRatio;
   const aboveThreshold = ratio >= state.threshold;
   const met = aboveThreshold === (state.direction === 'up');
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.3)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.3)', borderRadius: 10, padding: '12px 14px', marginBottom: 10, opacity: state.enabled ? 1 : 0.55 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span style={{ fontWeight: 700, fontSize: 13, color: '#8ecfff' }}>Cardiac</span>
         <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
           {isLive
             ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
-            : <Badge label="SIM" color="rgba(130,150,180,0.7)" bg="rgba(93,109,134,0.12)" />}
+            : <Badge label="—" color="rgba(130,150,180,0.5)" bg="rgba(93,109,134,0.10)" />}
           <Badge label="VisioMynd LF/HF" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
+          <button onClick={onToggle} style={{ background: state.enabled ? 'rgba(63,185,80,0.2)' : 'rgba(100,115,135,0.2)', border: `1px solid ${state.enabled ? 'rgba(63,185,80,0.5)' : 'rgba(100,115,135,0.4)'}`, borderRadius: 5, color: state.enabled ? '#3fb950' : '#6b7580', fontSize: 11, fontWeight: 600, padding: '2px 8px', cursor: 'pointer' }}>
+            {state.enabled ? 'ON' : 'OFF'}
+          </button>
         </div>
       </div>
       {isLive && (liveHr !== null || liveBreathing !== null) && (
@@ -238,7 +477,7 @@ const CardiacCard: FC<{
         ))}
         <div style={{ flex: 1, textAlign: 'right' }}>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>LF/HF</span>
-          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#f9a02e', fontWeight: 600 }}>{ratio.toFixed(2)}</div>
+          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#f9a02e', fontWeight: 600 }}>{isLive ? ratio.toFixed(2) : '—'}</div>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -252,9 +491,9 @@ const CardiacCard: FC<{
         <LineCanvas history={state.history} threshold={state.threshold} color="#f9a02e" />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <button onClick={() => onThresholdChange(-0.1)} style={threshBtnStyle}>−</button>
+        <button onClick={() => onThresholdChange(-0.1)} style={{ width: 28, height: 24, background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
         <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'rgba(248,129,74,0.9)', fontFamily: 'ui-monospace,monospace' }}>{state.threshold.toFixed(1)}</span>
-        <button onClick={() => onThresholdChange(0.1)} style={threshBtnStyle}>+</button>
+        <button onClick={() => onThresholdChange(0.1)} style={{ width: 28, height: 24, background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button onClick={onOpenVisioMynd} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: '1px solid rgba(88,166,255,0.4)', background: 'rgba(88,166,255,0.1)', color: '#8ecfff', cursor: 'pointer' }}>
@@ -267,6 +506,8 @@ const CardiacCard: FC<{
 };
 
 // ── Progress gauge ─────────────────────────────────────────────────────────
+
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
 const ProgressGauge: FC<{ score: number }> = ({ score }) => {
   const r = 52; const cx = 70; const cy = 70;
@@ -292,20 +533,20 @@ const ProgressGauge: FC<{ score: number }> = ({ score }) => {
 interface BnbState {
   audioFileName: string;
   playState: 'stopped' | 'playing' | 'paused';
-  progress: number;      // 0–100
-  volume: number;        // 0–100
+  progress: number;
+  volume: number;
   oscEnabled: boolean;
   oscWaveform: OscWaveform;
   oscFreq: number;
-  oscVolume: number;     // 0–100
+  oscVolume: number;
   bbFixed: boolean;
   bbMinHz: number;
   bbMaxHz: number;
   bbCurrentHz: number;
   bnbMethod: BnbMethod;
   modEnabled: boolean;
-  modInterval: number;   // ms
-  modStep: number;       // Hz
+  modInterval: number;
+  modStep: number;
   modTrend: ModTrend;
 }
 
@@ -361,7 +602,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         <Badge label="Binaural Beat" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
       </div>
 
-      {/* ── 1. File Load ── */}
+      {/* Audio File */}
       <div style={subHeaderStyle as React.CSSProperties}>Audio File</div>
       <div
         onClick={() => fileInputRef.current?.click()}
@@ -382,7 +623,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       <input ref={fileInputRef} type="file" accept=".wav,.mp3,audio/*" style={{ display: 'none' }}
         onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
 
-      {/* ── 2. Playback Controls ── */}
+      {/* Playback */}
       <div style={subHeaderStyle as React.CSSProperties}>Playback</div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
         {([['▶', 'playing'], ['⏸', 'paused'], ['⏹', 'stopped']] as [string, BnbState['playState']][]).map(([icon, state]) => (
@@ -392,8 +633,6 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
           </button>
         ))}
       </div>
-
-      {/* Progress bar */}
       <div style={{ marginBottom: 6 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'ui-monospace,monospace' }}>
@@ -405,8 +644,6 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
           onChange={e => onChange({ progress: parseInt(e.target.value) })}
           style={{ width: '100%', accentColor: '#58a6ff' }} />
       </div>
-
-      {/* Volume */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
         <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Vol</span>
         <input type="range" min={0} max={100} value={bnb.volume}
@@ -415,7 +652,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'ui-monospace,monospace', width: 34, textAlign: 'right' }}>{bnb.volume}%</span>
       </div>
 
-      {/* ── 3. Oscillator Source ── */}
+      {/* Oscillator Source */}
       <div style={subHeaderStyle as React.CSSProperties}>Oscillator Source</div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, cursor: 'pointer' }}>
         <input type="checkbox" checked={bnb.oscEnabled} onChange={e => onChange({ oscEnabled: e.target.checked })} style={{ accentColor: '#58a6ff' }} />
@@ -448,7 +685,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         </div>
       </div>
 
-      {/* ── 4. Binaural Beat Frequency ── */}
+      {/* Binaural Beat Frequency */}
       <div style={subHeaderStyle as React.CSSProperties}>Binaural Beat Frequency</div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, cursor: 'pointer' }}>
         <input type="checkbox" checked={bnb.bbFixed} onChange={e => onChange({ bbFixed: e.target.checked })} style={{ accentColor: '#58a6ff' }} />
@@ -472,7 +709,6 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Current Beat</span>
         <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 16, fontWeight: 700, color: '#58a6ff' }}>{formatHz(bnb.bbCurrentHz)} Hz</span>
       </div>
-      {/* Band shortcuts */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
         {BNB_BANDS.map(b => (
           <button key={b.label} onClick={() => onChange({ bbMinHz: b.min, bbMaxHz: b.max, bbCurrentHz: (b.min + b.max) / 2, bbFixed: false })}
@@ -482,7 +718,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         ))}
       </div>
 
-      {/* ── 5. Binaural Method ── */}
+      {/* Binaural Method */}
       <div style={subHeaderStyle as React.CSSProperties}>Binaural Method</div>
       <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}>
         {([['global-ssb', 'Global SSB'], ['band-shift', 'Band-Shift'], ['sub-layer', 'Sub-Layer']] as [BnbMethod, string][]).map(([id, label]) => (
@@ -496,7 +732,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         {BNB_METHOD_DESC[bnb.bnbMethod]}
       </div>
 
-      {/* ── 6. Modulation ── */}
+      {/* Modulation */}
       <div style={subHeaderStyle as React.CSSProperties}>Modulation</div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, cursor: 'pointer' }}>
         <input type="checkbox" checked={bnb.modEnabled} onChange={e => onChange({ modEnabled: e.target.checked })} style={{ accentColor: '#58a6ff' }} />
@@ -541,12 +777,14 @@ function makeDefaultIndicators(): EegIndicator[] {
   return Array.from({ length: 5 }, (_, i) => ({
     id: i + 1,
     enabled: i < 2,
-    channel: CHANNELS[i % CHANNELS.length],
-    band: BANDS[i % BANDS.length],
+    channel: CHANNELS[i % CHANNELS.length]!,
+    band: BANDS[i % BANDS.length]!,
     direction: 'up' as Direction,
-    value: BAND_BASE[BANDS[i % BANDS.length]],
-    threshold: BAND_BASE[BANDS[i % BANDS.length]] * 1.2,
+    value: 0,
+    threshold: BAND_BASE[BANDS[i % BANDS.length]!]! * 1.2,
+    autoThreshold: false,
     history: [],
+    formula: i === 4 ? 'Fp1_Alpha / (Fp1_Alpha + Fp2_Theta)' : '',
   }));
 }
 
@@ -556,18 +794,22 @@ export interface TrainingViewProps {
 }
 
 export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) => {
-  // Live band power from EEG stream (null = not connected yet)
   const liveBandPower = useBandPower(packets, filterParams ?? DEFAULT_FILTER_PARAMS);
-  const isConnected = packets !== undefined && packets.length > 0;
+  // Ref for stale-closure-safe access inside tick
+  const liveBandPowerRef = useRef(liveBandPower);
+  useEffect(() => { liveBandPowerRef.current = liveBandPower; }, [liveBandPower]);
+
+  const isLive = liveBandPower !== null && (packets?.length ?? 0) > 0;
 
   const [indicators, setIndicators] = useState<EegIndicator[]>(makeDefaultIndicators);
   const [cardiac, setCardiac] = useState<CardiacState>({
-    lfValue: 0.8, hfValue: 0.65, lfHfRatio: 1.2,
+    enabled: true,
+    lfValue: 0, hfValue: 0, lfHfRatio: 0,
     direction: 'up', threshold: 1.5, history: [],
   });
   const [bnb, setBnb] = useState<BnbState>(DEFAULT_BNB);
 
-  // VisioMynd live cardiac data (received via postMessage from rppg-webapp child window)
+  // VisioMynd live cardiac data
   const [visioMyndLive, setVisioMyndLive] = useState(false);
   const [visioMyndHr, setVisioMyndHr] = useState<number | null>(null);
   const [visioMyndBreathing, setVisioMyndBreathing] = useState<number | null>(null);
@@ -582,7 +824,6 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
       setVisioMyndBreathing(breathing ?? null);
       setVisioMyndLfhf(lfhf ?? null);
       setVisioMyndLive(true);
-      // Reset live flag if no message for 5 s
       if (visioMyndTimeoutRef.current) clearTimeout(visioMyndTimeoutRef.current);
       visioMyndTimeoutRef.current = setTimeout(() => setVisioMyndLive(false), 5000);
     };
@@ -610,108 +851,105 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
   const [feedbackUrl, setFeedbackUrl] = useState('');
   const [operatorNotes, setOperatorNotes] = useState('');
   const [overallScore, setOverallScore] = useState(0);
-  const [overlayOpacity, setOverlayOpacity] = useState(0); // 0=全黑, 100=全透明
-  const [simSpeed, setSimSpeed] = useState(1);
+  const [overlayOpacity, setOverlayOpacity] = useState(0);
 
   const aboveCountRef = useRef(0);
   const totalCountRef = useRef(0);
   const feedbackWindowRef = useRef<Window | null>(null);
 
-  // ── postMessage helper ──
   const sendToFeedbackWindow = useCallback((data: Record<string, unknown>) => {
     const win = feedbackWindowRef.current;
     if (win && !win.closed) win.postMessage(data, '*');
   }, []);
 
   const applyOverlay = useCallback((opacityPct: number) => {
-    // opacityPct=0 → overlay fully black (overlay CSS opacity=1)
-    // opacityPct=100 → overlay invisible (overlay CSS opacity=0)
     sendToFeedbackWindow({ type: 'nfb_overlay', opacity: 1 - opacityPct / 100 });
   }, [sendToFeedbackWindow]);
 
-  // Lookup helpers for live band power
+  // Lookup live band power via ref (avoids stale closure)
   const getLiveBandPower = useCallback((channel: Channel, band: Band): number | null => {
-    if (!liveBandPower) return null;
+    const bp = liveBandPowerRef.current;
+    if (!bp) return null;
     const chIdx = CHANNEL_LABELS.indexOf(channel as typeof CHANNEL_LABELS[number]);
     const bandIdx = NFB_BANDS.findIndex(b => b.name === band);
     if (chIdx < 0 || bandIdx < 0) return null;
-    return liveBandPower[chIdx]?.[bandIdx] ?? null;
-  }, [liveBandPower]);
+    return bp[chIdx]?.[bandIdx] ?? null;
+  }, []); // stable — reads via ref
 
-  // ── Simulation tick ──
-  const tick = useCallback(() => {
-    const speed = simSpeed;
+  // ── Tick: update values from live EEG data only ──
+  const sessionRunningRef = useRef(sessionRunning);
+  const sessionDurationRef = useRef(sessionDuration);
+  useEffect(() => { sessionRunningRef.current = sessionRunning; }, [sessionRunning]);
+  useEffect(() => { sessionDurationRef.current = sessionDuration; }, [sessionDuration]);
 
-    // EEG — use live data when connected, otherwise simulate
-    setIndicators(prev => prev.map(ind => {
-      if (!ind.enabled) return ind;
-      const live = getLiveBandPower(ind.channel, ind.band);
-      let newVal: number;
-      if (live !== null && live > 0) {
-        newVal = live;
-      } else {
-        const base = BAND_BASE[ind.band];
-        newVal = randomDrift(ind.value, base, speed);
-      }
-      return { ...ind, value: newVal, history: [...ind.history, newVal].slice(-HISTORY_LEN) };
-    }));
-
-    // Cardiac — use live VisioMynd data when available, otherwise simulate
-    setCardiac(c => {
-      if (visioMyndLive && visioMyndLfhf !== null) {
-        const next = visioMyndLfhf;
-        return {
-          ...c, lfHfRatio: next,
-          lfValue: next * 0.7 + 0.1, hfValue: Math.max(0.05, 0.7 - next * 0.05 + 0.1),
-          history: [...c.history, next].slice(-HISTORY_LEN),
-        };
-      }
-      const next = Math.max(0.3, Math.min(4, c.lfHfRatio + (Math.random() - 0.5) * 0.15 * speed));
-      return {
-        ...c, lfHfRatio: next,
-        lfValue: next * 0.7 + 0.1, hfValue: Math.max(0.05, 0.7 - next * 0.05 + 0.1),
-        history: [...c.history, next].slice(-HISTORY_LEN),
-      };
-    });
-
-    // BNB: drift bbCurrentHz when not fixed
-    setBnb(b => {
-      if (b.bbFixed) return b;
-      const range = b.bbMaxHz - b.bbMinHz;
-      if (range <= 0) return b;
-      let next = b.bbCurrentHz;
-      if (b.modEnabled) {
-        const step = b.modStep * (b.modTrend === 'up' ? 1 : b.modTrend === 'down' ? -1 : (Math.random() > 0.5 ? 1 : -1));
-        next = Math.max(b.bbMinHz, Math.min(b.bbMaxHz, b.bbCurrentHz + step * speed * 0.1));
-      } else {
-        next = Math.max(b.bbMinHz, Math.min(b.bbMaxHz, b.bbCurrentHz + (Math.random() - 0.5) * 0.1 * speed));
-      }
-      return { ...b, bbCurrentHz: next };
-    });
-
-    // Session stats
-    if (sessionRunning) {
-      setSessionDuration(d => d + 1);
-      setIndicators(current => {
-        const enabled = current.filter(i => i.enabled);
-        const above = enabled.filter(i => i.value >= i.threshold).length;
-        totalCountRef.current += Math.max(enabled.length, 1);
-        aboveCountRef.current += above;
-        const pct = Math.round((aboveCountRef.current / totalCountRef.current) * 100);
-        setAboveThresholdPct(pct);
-        setRewardRate(Math.round(pct * 0.85));
-        setOverallScore(Math.min(100, Math.round(pct * 0.9)));
-        // Send stats to feedback window
-        sendToFeedbackWindow({ type: 'nfb_status', pct, duration: sessionDuration });
-        return current;
-      });
-    }
-  }, [simSpeed, sessionRunning, sessionDuration, sendToFeedbackWindow, visioMyndLive, visioMyndLfhf]);
+  const sendToFeedbackWindowRef = useRef(sendToFeedbackWindow);
+  useEffect(() => { sendToFeedbackWindowRef.current = sendToFeedbackWindow; }, [sendToFeedbackWindow]);
 
   useEffect(() => {
-    const interval = setInterval(tick, Math.round(1000 / simSpeed));
+    const interval = setInterval(() => {
+      // EEG indicators — only update when live data available
+      setIndicators(prev => prev.map(ind => {
+        if (!ind.enabled) return ind;
+        let newVal: number;
+        if (ind.id === 5) {
+          // Formula card: eval using liveBandPowerRef
+          newVal = evalFormula(ind.formula, liveBandPowerRef.current) ?? ind.value;
+        } else {
+          const live = getLiveBandPower(ind.channel, ind.band);
+          if (live === null) return { ...ind, history: [...ind.history, ind.value].slice(-HISTORY_LEN) };
+          newVal = live;
+        }
+        return { ...ind, value: newVal, history: [...ind.history, newVal].slice(-HISTORY_LEN) };
+      }));
+
+      // Cardiac — only update if VisioMynd live
+      setCardiac(c => {
+        if (!c.enabled) return c;
+        if (visioMyndLive && visioMyndLfhf !== null) {
+          const next = visioMyndLfhf;
+          return {
+            ...c, lfHfRatio: next,
+            lfValue: next * 0.7 + 0.1, hfValue: Math.max(0.05, 0.7 - next * 0.05 + 0.1),
+            history: [...c.history, next].slice(-HISTORY_LEN),
+          };
+        }
+        // Not live — keep previous, just extend history with current value
+        return { ...c, history: [...c.history, c.lfHfRatio].slice(-HISTORY_LEN) };
+      });
+
+      // BNB: drift bbCurrentHz when not fixed
+      setBnb(b => {
+        if (b.bbFixed) return b;
+        const range = b.bbMaxHz - b.bbMinHz;
+        if (range <= 0) return b;
+        let next = b.bbCurrentHz;
+        if (b.modEnabled) {
+          const step = b.modStep * (b.modTrend === 'up' ? 1 : b.modTrend === 'down' ? -1 : (Math.random() > 0.5 ? 1 : -1));
+          next = Math.max(b.bbMinHz, Math.min(b.bbMaxHz, b.bbCurrentHz + step * 0.1));
+        }
+        return { ...b, bbCurrentHz: next };
+      });
+
+      // Session stats
+      if (sessionRunningRef.current) {
+        setSessionDuration(d => d + 1);
+        setIndicators(current => {
+          const enabled = current.filter(i => i.enabled);
+          const above = enabled.filter(i => i.value >= i.threshold).length;
+          totalCountRef.current += Math.max(enabled.length, 1);
+          aboveCountRef.current += above;
+          const pct = Math.round((aboveCountRef.current / totalCountRef.current) * 100);
+          setAboveThresholdPct(pct);
+          setRewardRate(Math.round(pct * 0.85));
+          setOverallScore(Math.min(100, Math.round(pct * 0.9)));
+          sendToFeedbackWindowRef.current({ type: 'nfb_status', pct, duration: sessionDurationRef.current });
+          return current;
+        });
+      }
+    }, 1000);
     return () => clearInterval(interval);
-  }, [tick, simSpeed]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getLiveBandPower, visioMyndLive, visioMyndLfhf]);
 
   // ── Open feedback window ──
   const openFeedbackWindow = useCallback((url: string) => {
@@ -745,7 +983,6 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
 </body>
 </html>`);
     win.document.close();
-    // Start fully opaque, then apply current opacity after a short delay
     setTimeout(() => applyOverlay(overlayOpacity), 600);
   }, [applyOverlay, overlayOpacity]);
 
@@ -784,46 +1021,50 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
     letterSpacing: '0.08em', marginBottom: 8, padding: '2px 0', borderBottom: '1px solid var(--border)',
   };
 
+  const eegCardHandlers = {
+    onToggle: (id: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i)),
+    onChannelChange: (id: number, ch: Channel) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch } : i)),
+    onBandChange: (id: number, b: Band) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, band: b, threshold: BAND_BASE[b]! * 1.2 } : i)),
+    onDirectionChange: (id: number, d: Direction) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, direction: d } : i)),
+    onThresholdChange: (id: number, delta: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, threshold: Math.max(0.5, i.threshold + delta) } : i)),
+    onAutoThresholdToggle: (id: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, autoThreshold: !i.autoThreshold } : i)),
+  };
+
   return (
     <div style={{ display: 'flex', gap: 16, height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Column 1: EEG odd ── */}
+      {/* ── Column 1: EEG odd (#1 #3 #5) ── */}
       <div style={colStyle}>
         <div style={sectionHeaderStyle}>EEG NFB #1 #3 #5</div>
-        {oddIndicators.map(ind => (
-          <EegCard key={ind.id} indicator={ind} isLive={isConnected && liveBandPower !== null}
-            onToggle={id => setIndicators(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i))}
-            onChannelChange={(id, ch) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch } : i))}
-            onBandChange={(id, b) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, band: b, threshold: BAND_BASE[b] * 1.2 } : i))}
-            onDirectionChange={(id, d) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, direction: d } : i))}
-            onThresholdChange={(id, delta) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, threshold: Math.max(0.5, i.threshold + delta) } : i))}
+        {oddIndicators.map(ind => ind.id === 5 ? (
+          <FormulaCard
+            key={ind.id}
+            indicator={ind}
+            isLive={isLive}
+            liveBandPower={liveBandPower}
+            onToggle={eegCardHandlers.onToggle}
+            onFormulaChange={(id, formula) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, formula } : i))}
+            onThresholdChange={eegCardHandlers.onThresholdChange}
+            onAutoThresholdToggle={eegCardHandlers.onAutoThresholdToggle}
+            onDirectionChange={eegCardHandlers.onDirectionChange}
           />
+        ) : (
+          <EegCard key={ind.id} indicator={ind} isLive={isLive} {...eegCardHandlers} />
         ))}
-        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', marginTop: 4 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6 }}>Sim Speed: {simSpeed.toFixed(1)}×</div>
-          <input type="range" min={0.2} max={4} step={0.1} value={simSpeed}
-            onChange={e => setSimSpeed(parseFloat(e.target.value))}
-            style={{ width: '100%', accentColor: '#58a6ff' }} />
-        </div>
       </div>
 
-      {/* ── Column 2: EEG even + Cardiac ── */}
+      {/* ── Column 2: EEG even (#2 #4) + Cardiac ── */}
       <div style={colStyle}>
         <div style={sectionHeaderStyle}>EEG NFB #2 #4 + Cardiac</div>
         {evenIndicators.map(ind => (
-          <EegCard key={ind.id} indicator={ind} isLive={isConnected && liveBandPower !== null}
-            onToggle={id => setIndicators(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i))}
-            onChannelChange={(id, ch) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch } : i))}
-            onBandChange={(id, b) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, band: b, threshold: BAND_BASE[b] * 1.2 } : i))}
-            onDirectionChange={(id, d) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, direction: d } : i))}
-            onThresholdChange={(id, delta) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, threshold: Math.max(0.5, i.threshold + delta) } : i))}
-          />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive} {...eegCardHandlers} />
         ))}
         <CardiacCard
           state={cardiac}
           isLive={visioMyndLive}
           liveHr={visioMyndHr}
           liveBreathing={visioMyndBreathing}
+          onToggle={() => setCardiac(c => ({ ...c, enabled: !c.enabled }))}
           onDirectionChange={d => setCardiac(c => ({ ...c, direction: d }))}
           onThresholdChange={delta => setCardiac(c => ({ ...c, threshold: Math.max(0.1, c.threshold + delta) }))}
           onOpenVisioMynd={handleOpenVisioMynd}
@@ -870,23 +1111,25 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
               <div key={ind.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(93,109,134,0.15)' }}>
                 <span style={{ fontSize: 12, color: '#dce9f8' }}>
                   EEG #{ind.id}&nbsp;
-                  <span style={{ color: 'var(--text-secondary)' }}>{ind.direction === 'up' ? '↑' : '↓'} {ind.channel} · {ind.band}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{ind.direction === 'up' ? '↑' : '↓'} {ind.id === 5 ? 'Formula' : `${ind.channel} · ${ind.band}`}</span>
                 </span>
                 <Badge label={met ? '達標' : '未達標'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
               </div>
             );
           })}
           {/* Cardiac row */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0' }}>
-            <span style={{ fontSize: 12, color: '#dce9f8' }}>
-              Cardiac&nbsp;<span style={{ color: 'var(--text-secondary)' }}>{cardiac.direction === 'up' ? '↑' : '↓'} LF/HF</span>
-            </span>
-            <Badge
-              label={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? '達標' : '未達標'}
-              color={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? '#3fb950' : '#f85149'}
-              bg={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'}
-            />
-          </div>
+          {cardiac.enabled && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0' }}>
+              <span style={{ fontSize: 12, color: '#dce9f8' }}>
+                Cardiac&nbsp;<span style={{ color: 'var(--text-secondary)' }}>{cardiac.direction === 'up' ? '↑' : '↓'} LF/HF</span>
+              </span>
+              <Badge
+                label={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? '達標' : '未達標'}
+                color={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? '#3fb950' : '#f85149'}
+                bg={(cardiac.lfHfRatio >= cardiac.threshold) === (cardiac.direction === 'up') ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'}
+              />
+            </div>
+          )}
         </div>
 
         {/* Feedback content */}
@@ -895,8 +1138,6 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
           <input type="url" placeholder="Feedback URL (e.g. https://…)"
             value={feedbackUrl} onChange={e => setFeedbackUrl(e.target.value)}
             style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '6px 8px', marginBottom: 8, boxSizing: 'border-box' }} />
-
-          {/* Overlay opacity control */}
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>遮罩透明度</span>
@@ -909,8 +1150,6 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
               <span>全黑</span><span>全透明</span>
             </div>
           </div>
-
-          {/* Overlay preview */}
           <div style={{
             width: '100%', height: 48,
             background: `rgba(0,0,0,${1 - overlayOpacity / 100})`,
@@ -925,7 +1164,6 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams }) =
               <span style={{ fontSize: 11, color: 'rgba(93,109,134,0.5)' }}>遮罩預覽</span>
             )}
           </div>
-
           <button
             onClick={sessionRunning ? handleStopSession : handleStartSession}
             style={{

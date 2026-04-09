@@ -530,7 +530,6 @@ function App() {
             startTime={recordStartTime}
             onEventMarker={handleEventMarker}
             eventMarkers={eventMarkers}
-            onClearEventMarkers={() => setEventMarkers([])}
             qualityConfig={qualityConfig}
             onQualityConfigChange={setQualityConfig}
             currentWindowStds={currentWindowStds}
@@ -551,7 +550,7 @@ function App() {
   // Tab switching guards
   const handleTabChange = (tab: TabType) => {
     // All non-home tabs require connection
-    const restricted = ['impedance', 'signal', 'fft', 'record'] as TabType[];
+    const restricted = ['impedance', 'signal', 'fft', 'record', 'training'] as TabType[];
     if (restricted.includes(tab) && !isConnected) return;
     // Impedance blocked during recording
     if (tab === 'impedance' && isRecording) return;
@@ -563,9 +562,6 @@ function App() {
   return (
     <div className="app-container">
       <Header
-        status={status}
-        packetRate={deviceStats.packetRate}
-        deviceId={deviceId}
         lang={lang}
         onLangToggle={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
       />
@@ -577,6 +573,8 @@ function App() {
           isConnected={isConnected}
           isImpedanceActive={isImpedanceActive}
           isRecording={isRecording}
+          packetRate={deviceStats.packetRate}
+          deviceId={deviceId}
         />
         <main className="content-area">
           {renderContent()}

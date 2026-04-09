@@ -26,16 +26,79 @@ const BNB_METHOD_DESC: Record<BnbMethod, string> = {
   'sub-layer': 'Carrier hidden below audible range; beat modulates amplitude envelope.',
 };
 
-// 7 preset indicators (UI only, logic to be added later)
-const PRESET_OPTIONS = [
-  { value: '', label: '— 選擇預設 —' },
-  { value: 'alpha_enhance',   label: '①  Alpha 增強 (Fz, α↑)' },
-  { value: 'smr_enhance',     label: '②  SMR 增強 (Pz, SMR↑)' },
-  { value: 'theta_suppress',  label: '③  Theta 抑制 (Fz, θ↓)' },
-  { value: 'beta_enhance',    label: '④  Beta 增強 (Fp1, β↑)' },
-  { value: 'hibeta_suppress', label: '⑤  Hi-Beta 抑制 (Fp1, HB↓)' },
-  { value: 'gamma_enhance',   label: '⑥  Gamma 增強 (T8, γ↑)' },
-  { value: 'delta_suppress',  label: '⑦  Delta 抑制 (Fz, δ↓)' },
+interface PresetOption {
+  value: string;
+  label: string;
+  info: string;
+  formula: string;
+  direction: Direction;
+}
+
+const PRESET_OPTIONS: PresetOption[] = [
+  { value: '', label: '— 選擇預設 —', info: '', formula: '', direction: 'up' },
+  {
+    value: 'tbr',
+    label: '① 注意力提升 (TBR)（Fz）',
+    info: '這是 ADHD 訓練最常用的指標，值越高代表專注度越高。\n算式：Fz_Beta / Fz_Theta',
+    formula: 'Fz_Beta / Fz_Theta',
+    direction: 'up',
+  },
+  {
+    value: 'alpha_relax',
+    label: '② 深度放鬆 (Alpha)（O1, O2）',
+    info: '閉眼訓練效果最佳，數值越高代表大腦進入節能放鬆狀態。\n算式：(O1_Alpha + O2_Alpha) / 2',
+    formula: '(O1_Alpha + O2_Alpha) / 2',
+    direction: 'up',
+  },
+  {
+    value: 'asymmetry',
+    label: '③ 情緒平衡 (Asymmetry)（Fp1/2, T7/8）',
+    info: '當右額葉 Alpha 高於左額葉，代表左腦較活躍，通常與正向情緒相關。\n算式：(Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)',
+    formula: '(Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)',
+    direction: 'up',
+  },
+  {
+    value: 'smr',
+    label: '④ 身心穩定 (SMR)（Fz）',
+    info: '提升運動覺節律，訓練在冷靜中保持警覺，適合緩解過動。\n算式：Fz_SMR',
+    formula: 'Fz_SMR',
+    direction: 'up',
+  },
+  {
+    value: 'beta_logic',
+    label: '⑤ 邏輯執行力 (Beta)（Fp1, T7）',
+    info: '強化左額葉的認知處理能力，有助於邏輯運算與決策。\n算式：(Fp1_Beta + T7_Beta) / 2',
+    formula: '(Fp1_Beta + T7_Beta) / 2',
+    direction: 'up',
+  },
+  {
+    value: 'theta_alpha',
+    label: '⑥ 創造力/內省 (T/A)（Pz）',
+    info: '訓練進入 Theta 與 Alpha 的交界，常見於深度冥想或藝術創作訓練。\n算式：Pz_Theta / Pz_Alpha',
+    formula: 'Pz_Theta / Pz_Alpha',
+    direction: 'up',
+  },
+  {
+    value: 'gamma',
+    label: '⑦ 認知統合 (Gamma)（Fp1, Fp2）',
+    info: '針對高階訊息整合與領悟力提升，訓練大腦的高頻同步。\n算式：(Fp1_Gamma + Fp2_Gamma) / 2',
+    formula: '(Fp1_Gamma + Fp2_Gamma) / 2',
+    direction: 'up',
+  },
+  {
+    value: 'hibeta_anx',
+    label: '⑧ 焦慮控制 (High-Beta)（T7, Pz, T8）',
+    info: '抑制後頂葉的高頻 Beta 波 (20-30Hz)，數值越高代表越不焦慮。\n算式：4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)',
+    formula: '4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)',
+    direction: 'up',
+  },
+  {
+    value: 'fm_theta',
+    label: '⑨ 心流狀態 (Fm-Theta)（Fz）',
+    info: '針對前額葉正中 Theta 波，數值越高代表在複雜任務中的專注流動感越強。\n算式：Fz_Theta',
+    formula: 'Fz_Theta',
+    direction: 'up',
+  },
 ];
 
 interface EegIndicator {
@@ -48,7 +111,8 @@ interface EegIndicator {
   threshold: number;
   autoThreshold: boolean;
   history: number[];
-  formula: string;   // used by id=5 custom index
+  formula: string;   // used by id=5 custom index and preset formulas for #1–4
+  presetKey: string; // '' = custom single-band, otherwise key from PRESET_OPTIONS
 }
 
 interface CardiacState {
@@ -197,15 +261,18 @@ const LineCanvas: FC<{ history: number[]; threshold: number; color?: string }> =
 const EegCard: FC<{
   indicator: EegIndicator;
   isLive: boolean;
+  liveBandPower?: number[][] | null;
   onToggle: (id: number) => void;
   onChannelChange: (id: number, ch: Channel) => void;
   onBandChange: (id: number, b: Band) => void;
   onDirectionChange: (id: number, d: Direction) => void;
   onThresholdChange: (id: number, delta: number) => void;
   onAutoThresholdToggle: (id: number) => void;
-}> = ({ indicator, isLive, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle }) => {
+  onPresetApply: (id: number, presetKey: string, formula: string, direction: Direction) => void;
+}> = ({ indicator, isLive, liveBandPower, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onPresetApply }) => {
   const aboveThreshold = indicator.value >= indicator.threshold;
   const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
+  const activePreset = PRESET_OPTIONS.find(p => p.value === indicator.presetKey) ?? null;
   const selectStyle: React.CSSProperties = {
     background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5,
     color: 'var(--text-primary)', fontSize: 12, padding: '3px 6px', cursor: 'pointer', flex: 1,
@@ -225,28 +292,52 @@ const EegCard: FC<{
         </button>
       </div>
 
-      {/* Preset dropdown */}
-      <div style={{ marginBottom: 8 }}>
+      {/* Preset dropdown + ⓘ info */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
         <select
-          defaultValue=""
-          onChange={() => { /* TODO: apply preset */ }}
-          style={{ ...selectStyle, width: '100%', flex: 'unset' }}
+          value={indicator.presetKey}
+          onChange={e => {
+            const key = e.target.value;
+            const preset = PRESET_OPTIONS.find(p => p.value === key);
+            onPresetApply(indicator.id, key, preset?.formula ?? '', preset?.direction ?? 'up');
+          }}
+          style={{ ...selectStyle, flex: 1, width: 'unset' }}
         >
           {PRESET_OPTIONS.map(p => (
             <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </select>
+        {activePreset && (
+          <span
+            title={activePreset.info}
+            style={{
+              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+              background: 'rgba(88,166,255,0.15)', border: '1px solid rgba(88,166,255,0.4)',
+              color: '#58a6ff', fontSize: 11, fontWeight: 700, cursor: 'help',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none',
+            }}
+          >i</span>
+        )}
       </div>
 
-      {/* Channel + Band selectors */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-        <select value={indicator.channel} onChange={e => onChannelChange(indicator.id, e.target.value as Channel)} style={selectStyle}>
-          {CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
-        </select>
-        <select value={indicator.band} onChange={e => onBandChange(indicator.id, e.target.value as Band)} style={selectStyle}>
-          {BANDS.map(b => <option key={b} value={b}>{b}</option>)}
-        </select>
-      </div>
+      {/* Formula display (preset) OR Channel + Band selectors (custom) */}
+      {activePreset ? (
+        <div style={{
+          marginBottom: 8, padding: '3px 7px', background: 'var(--bg-tertiary)',
+          borderRadius: 4, border: '1px solid rgba(88,166,255,0.15)',
+          fontSize: 10, color: 'rgba(88,166,255,0.55)', fontFamily: 'ui-monospace,monospace',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{activePreset.formula}</div>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <select value={indicator.channel} onChange={e => onChannelChange(indicator.id, e.target.value as Channel)} style={selectStyle}>
+            {CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+          </select>
+          <select value={indicator.band} onChange={e => onBandChange(indicator.id, e.target.value as Band)} style={selectStyle}>
+            {BANDS.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </div>
+      )}
 
       {/* Direction */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -260,7 +351,7 @@ const EegCard: FC<{
       {/* Value display */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
-          {isLive ? indicator.value.toFixed(2) : '—'} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>μV²</span>
+          {isLive ? indicator.value.toFixed(3) : '—'} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{activePreset ? '' : 'μV²'}</span>
         </span>
         <Badge label={met ? 'ON' : 'OFF'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
@@ -1001,6 +1092,7 @@ function makeDefaultIndicators(): EegIndicator[] {
     autoThreshold: false,
     history: [],
     formula: i === 4 ? 'Fp1_Alpha / (Fp1_Alpha + Fp2_Theta)' : '',
+    presetKey: '',
   }));
 }
 
@@ -1146,8 +1238,8 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
       setIndicators(prev => prev.map(ind => {
         if (!ind.enabled) return ind;
         let newVal: number;
-        if (ind.id === 5) {
-          // Formula card: eval using liveBandPowerRef
+        if (ind.formula) {
+          // Formula evaluation: used by id=5 (FormulaCard) and preset formulas for #1–4
           newVal = evalFormula(ind.formula, liveBandPowerRef.current) ?? ind.value;
         } else {
           const live = getLiveBandPower(ind.channel, ind.band);
@@ -1367,11 +1459,13 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
   const eegCardHandlers = {
     onToggle: (id: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i)),
-    onChannelChange: (id: number, ch: Channel) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch } : i)),
-    onBandChange: (id: number, b: Band) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, band: b, threshold: BAND_BASE[b]! * 1.2 } : i)),
+    onChannelChange: (id: number, ch: Channel) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch, presetKey: '', formula: '' } : i)),
+    onBandChange: (id: number, b: Band) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, band: b, threshold: BAND_BASE[b]! * 1.2, presetKey: '', formula: '' } : i)),
     onDirectionChange: (id: number, d: Direction) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, direction: d } : i)),
     onThresholdChange: (id: number, delta: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, threshold: Math.max(0.5, i.threshold + delta) } : i)),
     onAutoThresholdToggle: (id: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, autoThreshold: !i.autoThreshold } : i)),
+    onPresetApply: (id: number, presetKey: string, formula: string, direction: Direction) =>
+      setIndicators(prev => prev.map(i => i.id === id ? { ...i, presetKey, formula, direction } : i)),
   };
 
   return (
@@ -1392,14 +1486,14 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
             onDirectionChange={eegCardHandlers.onDirectionChange}
           />
         ) : (
-          <EegCard key={ind.id} indicator={ind} isLive={isLive} {...eegCardHandlers} />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={liveBandPower} {...eegCardHandlers} />
         ))}
       </div>
 
       {/* ── Column 2: EEG even (#2 #4) + Cardiac ── */}
       <div style={colStyle}>
         {evenIndicators.map(ind => (
-          <EegCard key={ind.id} indicator={ind} isLive={isLive} {...eegCardHandlers} />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={liveBandPower} {...eegCardHandlers} />
         ))}
         <CardiacCard
           state={cardiac}

@@ -621,7 +621,7 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = { fontSize: 11, color: 'var(--text-secondary)', marginBottom: 3, display: 'block' };
 const subHeaderStyle: React.CSSProperties = { fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '10px 0 6px', borderBottom: '1px solid rgba(93,109,134,0.2)', paddingBottom: 3 };
 
-const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => void }> = ({ bnb, onChange }) => {
+const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => void; onAudioBlob?: (blobUrl: string, name: string) => void }> = ({ bnb, onChange, onAudioBlob }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -739,8 +739,10 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       });
       audioElRef.current = el;
     }
-    audioElRef.current.src = URL.createObjectURL(file);
+    const blobUrl = URL.createObjectURL(file);
+    audioElRef.current.src = blobUrl;
     onChange({ audioFileName: file.name, playState: 'stopped', progress: 0 });
+    onAudioBlob?.(blobUrl, file.name);
   };
 
   const formatHz = (v: number) => v < 10 ? v.toFixed(2) : v.toFixed(1);
@@ -1090,6 +1092,13 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const pptxInputRef  = useRef<HTMLInputElement | null>(null);
   const pdfInputRef   = useRef<HTMLInputElement | null>(null);
 
+  // NFB audio feedback
+  const [nfbAudioEnabled, setNfbAudioEnabled] = useState(false);
+  const [nfbAudioSrc, setNfbAudioSrc] = useState<{ url: string; name: string } | null>(null);
+  const [bnbAudioBlob, setBnbAudioBlob] = useState<{ url: string; name: string } | null>(null);
+  const nfbAudioElRef = useRef<HTMLAudioElement | null>(null);
+  const nfbAudioInputRef = useRef<HTMLInputElement | null>(null);
+
   const sendToFeedbackWindow = useCallback((data: Record<string, unknown>) => {
     const win = feedbackWindowRef.current;
     if (win && !win.closed) win.postMessage(data, '*');
@@ -1106,7 +1115,10 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     const k = K_VALUES[difficultyLevel - 1]!;
     const oo = Math.max(0, Math.min(100, Math.round(k * Math.sqrt(targetAchievementPct))));
     setOverlayOpacity(oo);
-    if (sessionRunning) applyOverlay(oo);
+    if (sessionRunning) {
+      applyOverlay(oo);
+      if (nfbAudioElRef.current) nfbAudioElRef.current.volume = oo / 100;
+    }
   }, [targetAchievementPct, difficultyLevel, sessionRunning, applyOverlay]);
 
   // Lookup live band power via ref (avoids stale closure)
@@ -1310,6 +1322,24 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     }
   }, [feedbackUrl, openFeedbackWindow, openFeedbackWindowWithFile]);
 
+  // NFB audio: start/stop with session
+  useEffect(() => {
+    if (!nfbAudioEnabled || !nfbAudioSrc) return;
+    if (sessionRunning) {
+      if (!nfbAudioElRef.current) {
+        nfbAudioElRef.current = new Audio();
+        nfbAudioElRef.current.loop = true;
+      }
+      const el = nfbAudioElRef.current;
+      if (el.src !== nfbAudioSrc.url) el.src = nfbAudioSrc.url;
+      el.volume = overlayOpacity / 100;
+      el.play().catch(() => {});
+    } else {
+      nfbAudioElRef.current?.pause();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionRunning, nfbAudioEnabled, nfbAudioSrc]);
+
   const handleStopSession = useCallback(() => {
     setSessionRunning(false);
   }, []);
@@ -1386,7 +1416,8 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
       {/* ── Column 3: BNB Controls ── */}
       <div style={colStyle}>
-        <BnbColumn bnb={bnb} onChange={patch => setBnb(prev => ({ ...prev, ...patch }))} />
+        <BnbColumn bnb={bnb} onChange={patch => setBnb(prev => ({ ...prev, ...patch }))}
+          onAudioBlob={(url, name) => setBnbAudioBlob({ url, name })} />
       </div>
 
       {/* ── Column 4: Session Summary ── */}
@@ -1547,6 +1578,45 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               </span>
             ) : (
               <span style={{ fontSize: 11, color: 'rgba(93,109,134,0.5)' }}>遮罩預覽</span>
+            )}
+          </div>
+          {/* NFB Audio Feedback */}
+          <div style={{ background: 'var(--bg-tertiary)', borderRadius: 6, padding: '6px 10px', marginBottom: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+              <input type="checkbox" checked={nfbAudioEnabled} onChange={e => setNfbAudioEnabled(e.target.checked)}
+                style={{ accentColor: '#58a6ff', width: 13, height: 13 }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: nfbAudioEnabled ? '#58a6ff' : 'var(--text-secondary)' }}>
+                NFB 音效回饋（音量 = OO）
+              </span>
+            </label>
+            {nfbAudioEnabled && (
+              <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                <input ref={nfbAudioInputRef} type="file" accept="audio/*" style={{ display: 'none' }}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const f = e.target.files?.[0];
+                    if (f) setNfbAudioSrc({ url: URL.createObjectURL(f), name: f.name });
+                    e.target.value = '';
+                  }} />
+                <button onClick={() => nfbAudioInputRef.current?.click()} style={{
+                  flex: 1, padding: '4px 0', borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                  border: `1px solid ${nfbAudioSrc && !bnbAudioBlob?.url?.startsWith(nfbAudioSrc.url) ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`,
+                  background: 'var(--bg-secondary)', color: 'var(--text-secondary)',
+                }}>+ 選取音檔</button>
+                {bnbAudioBlob && (
+                  <button onClick={() => setNfbAudioSrc(bnbAudioBlob)} style={{
+                    flex: 1, padding: '4px 0', borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                    border: `1px solid ${nfbAudioSrc?.url === bnbAudioBlob.url ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`,
+                    background: nfbAudioSrc?.url === bnbAudioBlob.url ? 'rgba(88,166,255,0.15)' : 'var(--bg-secondary)',
+                    color: nfbAudioSrc?.url === bnbAudioBlob.url ? '#58a6ff' : 'var(--text-secondary)',
+                  }}>使用 BNB 音檔</button>
+                )}
+                {nfbAudioSrc && (
+                  <div style={{ width: '100%', fontSize: 10, color: 'rgba(88,166,255,0.7)', marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '85%' }}>{nfbAudioSrc.name}</span>
+                    <button onClick={() => setNfbAudioSrc(null)} style={{ background: 'none', border: 'none', color: 'rgba(248,81,73,0.7)', cursor: 'pointer', fontSize: 12, padding: '0 2px' }}>✕</button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           <button

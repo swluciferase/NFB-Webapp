@@ -1066,12 +1066,12 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   }, [sendToFeedbackWindow]);
 
   // Auto-compute overlay opacity from AT: OO = K - 10*sqrt(AT), clamped 0–100
+  // Runs always so dashboard shows live OO; applyOverlay only affects feedback window (no-op when closed)
   useEffect(() => {
-    if (!sessionRunning) return;
     const k = K_VALUES[difficultyLevel - 1]!;
     const oo = Math.max(0, Math.min(100, Math.round(k - 10 * Math.sqrt(aboveThresholdPct))));
     setOverlayOpacity(oo);
-    applyOverlay(oo);
+    if (sessionRunning) applyOverlay(oo);
   }, [aboveThresholdPct, difficultyLevel, sessionRunning, applyOverlay]);
 
   // Lookup live band power via ref (avoids stale closure)
@@ -1142,21 +1142,25 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
         return { ...b, bbCurrentHz: Math.max(b.bbMinHz, Math.min(b.bbMaxHz, b.bbCurrentHz + step * 0.1)) };
       });
 
-      // Session stats
-      if (sessionRunningRef.current) {
-        setSessionDuration(d => d + 1);
-        setIndicators(current => {
-          const enabled = current.filter(i => i.enabled);
-          const above = enabled.filter(i => i.value >= i.threshold).length;
-          totalCountRef.current += Math.max(enabled.length, 1);
-          aboveCountRef.current += above;
-          const pct = Math.round((aboveCountRef.current / totalCountRef.current) * 100);
-          setAboveThresholdPct(pct);
+      // AT accumulation — runs continuously from tab entry (not just during session)
+      setIndicators(current => {
+        const enabled = current.filter(i => i.enabled);
+        const above = enabled.filter(i => i.value >= i.threshold).length;
+        totalCountRef.current += Math.max(enabled.length, 1);
+        aboveCountRef.current += above;
+        const pct = Math.round((aboveCountRef.current / totalCountRef.current) * 100);
+        setAboveThresholdPct(pct);
+        if (sessionRunningRef.current) {
           setRewardRate(Math.round(pct * 0.85));
           setOverallScore(Math.min(100, Math.round(pct * 0.9)));
           sendToFeedbackWindowRef.current({ type: 'nfb_status', pct, duration: sessionDurationRef.current });
-          return current;
-        });
+        }
+        return current;
+      });
+
+      // Session duration counter
+      if (sessionRunningRef.current) {
+        setSessionDuration(d => d + 1);
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -1165,15 +1169,14 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
   // ── Open feedback window ──
   const openFeedbackWindow = useCallback((rawUrl: string) => {
-    // Auto-convert YouTube watch URLs to embeddable format
+    // Auto-convert YouTube watch/short URLs to embeddable format
     const url = rawUrl
       .replace(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&\s]+)[^\s]*/i, 'https://www.youtube.com/embed/$1?autoplay=1')
       .replace(/(?:https?:\/\/)?(?:www\.)?youtu\.be\/([^?&\s]+)[^\s]*/i, 'https://www.youtube.com/embed/$1?autoplay=1');
-    const win = window.open('', 'nfb_feedback_window', 'width=1280,height=800,resizable=yes');
-    if (!win) return;
-    feedbackWindowRef.current = win;
-    win.document.open();
-    win.document.write(`<!DOCTYPE html>
+
+    // Use a Blob URL so the window has a non-null origin (blob:https://…)
+    // YouTube embed refuses to load inside frames from null/about:blank origins.
+    const html = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -1197,16 +1200,20 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     });
   </script>
 </body>
-</html>`);
-    win.document.close();
-    setTimeout(() => applyOverlay(overlayOpacity), 600);
+</html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const blobUrl = URL.createObjectURL(blob);
+    const win = window.open(blobUrl, 'nfb_feedback_window', 'width=1280,height=800,resizable=yes');
+    if (!win) { URL.revokeObjectURL(blobUrl); return; }
+    feedbackWindowRef.current = win;
+    // Revoke blob URL after window has loaded the content
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    setTimeout(() => applyOverlay(overlayOpacity), 800);
   }, [applyOverlay, overlayOpacity]);
 
   const handleStartSession = useCallback(() => {
-    aboveCountRef.current = 0;
-    totalCountRef.current = 0;
+    // Keep aboveCountRef / totalCountRef — pre-session warmup data stabilises AT from the start
     setSessionDuration(0);
-    setAboveThresholdPct(0);
     setRewardRate(0);
     setOverallScore(0);
     setSessionRunning(true);

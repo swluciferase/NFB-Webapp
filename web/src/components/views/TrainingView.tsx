@@ -1065,6 +1065,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const [targetAchievementPct, setTargetAchievementPct] = useState(0);
   const [rewardRate, setRewardRate] = useState(0);
   const [feedbackUrl, setFeedbackUrl] = useState('');
+  const [feedbackFile, setFeedbackFile] = useState<File | null>(null);
   const [operatorNotes, setOperatorNotes] = useState('');
   const [overallScore, setOverallScore] = useState(0);
   const [overlayOpacity, setOverlayOpacity] = useState(0);
@@ -1076,6 +1077,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const [taMode, setTaMode] = useState<'and' | 'average'>('and');
   const taModeRef = useRef<'and' | 'average'>('and');
   useEffect(() => { taModeRef.current = taMode; }, [taMode]);
+  useEffect(() => { feedbackFileRef.current = feedbackFile; }, [feedbackFile]);
 
   // TA: sliding window of per-tick fractions (0/1 for AND, metCount/total for Average), capped at max W=23
   const taWindowRef = useRef<number[]>([]);
@@ -1083,6 +1085,10 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const sessionHistoryRef = useRef<number[]>([]);
 
   const feedbackWindowRef = useRef<Window | null>(null);
+  const feedbackFileRef = useRef<File | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const pptxInputRef  = useRef<HTMLInputElement | null>(null);
+  const pdfInputRef   = useRef<HTMLInputElement | null>(null);
 
   const sendToFeedbackWindow = useCallback((data: Record<string, unknown>) => {
     const win = feedbackWindowRef.current;
@@ -1264,14 +1270,45 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     setTimeout(() => applyOverlay(overlayOpacity), 800);
   }, [applyOverlay, overlayOpacity]);
 
+  const openFeedbackWindowWithFile = useCallback((file: File) => {
+    const feedbackPageUrl = new URL('nfb-feedback.html', window.location.href).href;
+    const win = window.open(feedbackPageUrl, 'nfb_feedback_window', 'width=1280,height=800,resizable=yes');
+    if (!win) return;
+    feedbackWindowRef.current = win;
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    const msgType = ext === 'pdf' ? 'nfb_pdf' : ext === 'pptx' ? 'nfb_pptx' : 'nfb_video';
+    const reader = new FileReader();
+    reader.onload = () => {
+      const buf = reader.result as ArrayBuffer;
+      // Wait for the window to load before sending
+      const trySend = () => {
+        if (win.closed) return;
+        win.postMessage({ type: msgType, buffer: buf, mimeType: file.type }, '*', [buf]);
+        setTimeout(() => applyOverlay(overlayOpacity), 200);
+      };
+      // Poll until window is ready (has a document)
+      const poll = setInterval(() => {
+        try {
+          if (win.document.readyState === 'complete') { clearInterval(poll); trySend(); }
+        } catch { clearInterval(poll); trySend(); }
+      }, 200);
+    };
+    reader.readAsArrayBuffer(file);
+  }, [applyOverlay, overlayOpacity]);
+
   const handleStartSession = useCallback(() => {
     sessionHistoryRef.current = []; // reset session-specific history
     setSessionDuration(0);
     setRewardRate(0);
     setOverallScore(0);
     setSessionRunning(true);
-    if (feedbackUrl.trim()) openFeedbackWindow(feedbackUrl.trim());
-  }, [feedbackUrl, openFeedbackWindow]);
+    const file = feedbackFileRef.current;
+    if (file) {
+      openFeedbackWindowWithFile(file);
+    } else if (feedbackUrl.trim()) {
+      openFeedbackWindow(feedbackUrl.trim());
+    }
+  }, [feedbackUrl, openFeedbackWindow, openFeedbackWindowWithFile]);
 
   const handleStopSession = useCallback(() => {
     setSessionRunning(false);
@@ -1457,8 +1494,41 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>Feedback Content</div>
           <input type="url" placeholder="Feedback URL (e.g. https://…)"
-            value={feedbackUrl} onChange={e => setFeedbackUrl(e.target.value)}
-            style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '6px 8px', marginBottom: 8, boxSizing: 'border-box' }} />
+            value={feedbackUrl} onChange={e => { setFeedbackUrl(e.target.value); setFeedbackFile(null); feedbackFileRef.current = null; }}
+            style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '6px 8px', marginBottom: 6, boxSizing: 'border-box' }} />
+          {/* Hidden file inputs */}
+          <input ref={videoInputRef} type="file" accept="video/*" style={{ display: 'none' }}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) { setFeedbackFile(f); setFeedbackUrl(''); } e.target.value = ''; }} />
+          <input ref={pptxInputRef} type="file" accept=".pptx" style={{ display: 'none' }}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) { setFeedbackFile(f); setFeedbackUrl(''); } e.target.value = ''; }} />
+          <input ref={pdfInputRef} type="file" accept=".pdf" style={{ display: 'none' }}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) { setFeedbackFile(f); setFeedbackUrl(''); } e.target.value = ''; }} />
+          {/* File picker buttons */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+            {(['video', 'pptx', 'pdf'] as const).map((type) => {
+              const labels: Record<string, string> = { video: '▶ 影片', pptx: '▶ 簡報', pdf: '▶ PDF' };
+              const refs: Record<string, React.RefObject<HTMLInputElement | null>> = { video: videoInputRef, pptx: pptxInputRef, pdf: pdfInputRef };
+              const isSelected = feedbackFile && (
+                type === 'pdf' ? feedbackFile.name.toLowerCase().endsWith('.pdf')
+                : type === 'pptx' ? feedbackFile.name.toLowerCase().endsWith('.pptx')
+                : !feedbackFile.name.toLowerCase().endsWith('.pdf') && !feedbackFile.name.toLowerCase().endsWith('.pptx')
+              );
+              return (
+                <button key={type} onClick={() => refs[type].current?.click()} style={{
+                  flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  border: `1px solid ${isSelected ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`,
+                  background: isSelected ? 'rgba(88,166,255,0.15)' : 'var(--bg-secondary)',
+                  color: isSelected ? '#58a6ff' : 'var(--text-secondary)',
+                }}>{labels[type]}</button>
+              );
+            })}
+          </div>
+          {feedbackFile && (
+            <div style={{ fontSize: 10, color: 'rgba(88,166,255,0.7)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '85%' }}>{feedbackFile.name}</span>
+              <button onClick={() => { setFeedbackFile(null); feedbackFileRef.current = null; }} style={{ background: 'none', border: 'none', color: 'rgba(248,81,73,0.7)', cursor: 'pointer', fontSize: 12, padding: '0 2px' }}>✕</button>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-tertiary)', borderRadius: 6, padding: '6px 10px', marginBottom: 10 }}>
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>遮罩透明度（自動）</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#58a6ff', fontFamily: 'ui-monospace,monospace' }}>{overlayOpacity}%</span>
@@ -1469,9 +1539,11 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
             border: '1px dashed rgba(93,109,134,0.4)', borderRadius: 6,
             display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10,
           }}>
-            {feedbackUrl ? (
+            {(feedbackUrl || feedbackFile) ? (
               <span style={{ color: `rgba(88,166,255,${overlayOpacity / 100})`, fontSize: 11 }}>
-                {feedbackUrl.slice(0, 32)}{feedbackUrl.length > 32 ? '…' : ''}
+                {feedbackFile
+                  ? feedbackFile.name.slice(0, 32) + (feedbackFile.name.length > 32 ? '…' : '')
+                  : feedbackUrl.slice(0, 32) + (feedbackUrl.length > 32 ? '…' : '')}
               </span>
             ) : (
               <span style={{ fontSize: 11, color: 'rgba(93,109,134,0.5)' }}>遮罩預覽</span>

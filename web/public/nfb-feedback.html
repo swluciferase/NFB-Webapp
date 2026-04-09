@@ -7,27 +7,305 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { width: 100vw; height: 100vh; overflow: hidden; background: #000; }
-  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
-  #overlay { position: absolute; inset: 0; background: #000; opacity: 1; pointer-events: none; transition: opacity 0.4s ease; }
+  #media { position: absolute; inset: 0; }
+  iframe, video { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+  video { object-fit: contain; }
+  #overlay { position: absolute; inset: 0; background: #000; opacity: 1; pointer-events: none; transition: opacity 0.4s ease; z-index: 100; }
+  /* Slideshow (PPTX) */
+  #slideshow { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #111; }
+  .slide { position: absolute; width: 960px; height: 540px; background: #fff; overflow: hidden; }
+  .slide-img { position: absolute; object-fit: fill; }
+  .slide-txt { position: absolute; overflow: hidden; word-break: break-word; white-space: pre-wrap; line-height: 1.25; }
+  #nav { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 200; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.35); cursor: pointer; transition: background .2s; }
+  .dot.on { background: rgba(255,255,255,0.9); }
+  /* PDF viewer */
+  #pdf-viewer { position: absolute; inset: 0; overflow-y: auto; background: #555; display: flex; flex-direction: column; align-items: center; padding: 20px 0; gap: 12px; }
+  #pdf-viewer canvas { display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 </style>
 </head>
 <body>
+  <div id="media"></div>
   <div id="overlay"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module" id="pdfjs-script"></script>
   <script>
-    var params = new URLSearchParams(location.search);
-    var src = params.get('url');
-    if (src && /^https?:\/\//i.test(src)) {
-      var iframe = document.createElement('iframe');
-      iframe.src = src;
-      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
-      iframe.allowFullscreen = true;
-      document.body.insertBefore(iframe, document.getElementById('overlay'));
+  var overlay  = document.getElementById('overlay');
+  var mediaDiv = document.getElementById('media');
+  var xmlParse = new DOMParser();
+  var slides   = [];
+  var cur      = 0;
+  var timer    = null;
+
+  // ── URL via query param ──────────────────────────────────────────
+  var params = new URLSearchParams(location.search);
+  var src = params.get('url');
+  if (src && /^https?:\/\//i.test(src)) {
+    var f = document.createElement('iframe');
+    f.src = src;
+    f.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+    f.allowFullscreen = true;
+    mediaDiv.appendChild(f);
+  }
+
+  // ── postMessage handler ──────────────────────────────────────────
+  window.addEventListener('message', function(e) {
+    if (!e.data) return;
+
+    if (e.data.type === 'nfb_overlay') {
+      overlay.style.opacity = e.data.opacity;
     }
-    window.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'nfb_overlay') {
-        document.getElementById('overlay').style.opacity = e.data.opacity;
-      }
+
+    if (e.data.type === 'nfb_video') {
+      mediaDiv.innerHTML = '';
+      var blob = new Blob([e.data.buffer], { type: e.data.mimeType || 'video/mp4' });
+      var v = document.createElement('video');
+      v.src = URL.createObjectURL(blob);
+      v.autoplay = true; v.loop = true; v.controls = false;
+      mediaDiv.appendChild(v);
+    }
+
+    if (e.data.type === 'nfb_pptx') {
+      loadPptx(e.data.buffer).catch(function(err){ console.error('PPTX error', err); });
+    }
+
+    if (e.data.type === 'nfb_pdf') {
+      loadPdf(e.data.buffer).catch(function(err){ console.error('PDF error', err); });
+    }
+  });
+
+  // ── PDF renderer ────────────────────────────────────────────────
+  async function loadPdf(buf) {
+    mediaDiv.innerHTML = '';
+    if (timer) { clearInterval(timer); timer = null; }
+
+    // PDF.js is loaded as a module; access via window.pdfjsLib set by the module
+    // We load it dynamically to avoid module/script scope issues
+    var pdfjsLib = window.pdfjsLib;
+    if (!pdfjsLib) {
+      // Wait for module to load
+      await new Promise(function(resolve, reject) {
+        var attempts = 0;
+        var check = setInterval(function() {
+          if (window.pdfjsLib) { clearInterval(check); resolve(); }
+          if (++attempts > 50) { clearInterval(check); reject(new Error('pdf.js timeout')); }
+        }, 100);
+      });
+      pdfjsLib = window.pdfjsLib;
+    }
+
+    var container = document.createElement('div');
+    container.id = 'pdf-viewer';
+    mediaDiv.appendChild(container);
+
+    var typedArray = new Uint8Array(buf);
+    var loadingTask = pdfjsLib.getDocument({ data: typedArray });
+    var pdf = await loadingTask.promise;
+    var scale = Math.max(window.innerWidth / 612, 1.2); // 612pt = letter width
+
+    for (var pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      var page = await pdf.getPage(pageNum);
+      var viewport = page.getViewport({ scale: scale });
+      var canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      var ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+      container.appendChild(canvas);
+    }
+  }
+
+  // ── PPTX renderer ───────────────────────────────────────────────
+  var EMU = 9525; // 1px = 9525 EMU at 96dpi
+  var NS_A   = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  var NS_P   = 'http://schemas.openxmlformats.org/presentationml/2006/main';
+  var NS_PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+  var NS_R   = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  var NS_REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+  function tag(doc, ns, name) { return Array.from(doc.getElementsByTagNameNS(ns, name)); }
+  function px(emu) { return Math.round((emu || 0) / EMU); }
+
+  async function loadPptx(buf) {
+    mediaDiv.innerHTML = '';
+    if (timer) { clearInterval(timer); timer = null; }
+    var zip = await JSZip.loadAsync(buf);
+
+    // Load all media as blob URLs
+    var media = {};
+    var tasks = [];
+    zip.forEach(function(path, file) {
+      if (!path.startsWith('ppt/media/')) return;
+      var ext = (path.split('.').pop() || '').toLowerCase();
+      var mime = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg',
+                   gif:'image/gif', bmp:'image/bmp', svg:'image/svg+xml',
+                   tiff:'image/tiff', tif:'image/tiff' }[ext];
+      if (!mime) return;
+      tasks.push(file.async('arraybuffer').then(function(b) {
+        media[path.split('/').pop()] = URL.createObjectURL(new Blob([b], {type: mime}));
+      }));
     });
+    await Promise.all(tasks);
+
+    // Parse slides
+    slides = [];
+    for (var i = 1; ; i++) {
+      var sf = zip.file('ppt/slides/slide' + i + '.xml');
+      if (!sf) break;
+      var rf = zip.file('ppt/slides/_rels/slide' + i + '.xml.rels');
+      var sXml = await sf.async('text');
+      var ridMap = {};
+      if (rf) {
+        var rDoc = xmlParse.parseFromString(await rf.async('text'), 'application/xml');
+        Array.from(rDoc.getElementsByTagNameNS(NS_REL, 'Relationship')).forEach(function(rel) {
+          var t = rel.getAttribute('Target') || '';
+          var id = rel.getAttribute('Id');
+          if (t.includes('/media/')) ridMap[id] = t.split('/').pop();
+        });
+      }
+      slides.push(buildSlide(sXml, ridMap, media));
+    }
+
+    if (slides.length) showSlideshow();
+  }
+
+  function buildSlide(xml, ridMap, media) {
+    var doc = xmlParse.parseFromString(xml, 'application/xml');
+    var div = document.createElement('div');
+    div.className = 'slide';
+
+    // Background colour
+    var bgNodes = tag(doc, NS_P, 'bg');
+    if (bgNodes.length) {
+      var clrNodes = tag(bgNodes[0], NS_A, 'srgbClr');
+      if (clrNodes.length) {
+        var val = clrNodes[0].getAttribute('val');
+        if (val) div.style.background = '#' + val;
+      }
+    }
+
+    var spTree = tag(doc, NS_P, 'spTree')[0];
+    if (!spTree) return div;
+
+    // Images (p:pic)
+    tag(spTree, NS_P, 'pic').concat(tag(spTree, NS_PIC, 'pic')).forEach(function(pic) {
+      var blips = tag(pic, NS_A, 'blip');
+      if (!blips.length) return;
+      var rId = blips[0].getAttributeNS(NS_R, 'embed');
+      if (!rId || !ridMap[rId] || !media[ridMap[rId]]) return;
+      var pos = getPos(pic);
+      var img = document.createElement('img');
+      img.className = 'slide-img';
+      img.src = media[ridMap[rId]];
+      img.style.left = pos.x + 'px'; img.style.top = pos.y + 'px';
+      img.style.width = pos.w + 'px'; img.style.height = pos.h + 'px';
+      div.appendChild(img);
+    });
+
+    // Text shapes (p:sp)
+    tag(spTree, NS_P, 'sp').forEach(function(sp) {
+      var txBodies = tag(sp, NS_P, 'txBody');
+      if (!txBodies.length) return;
+      var txBody = txBodies[0];
+      var lines = [];
+      tag(txBody, NS_A, 'p').forEach(function(para) {
+        var line = tag(para, NS_A, 't').map(function(t){ return t.textContent; }).join('');
+        lines.push(line);
+      });
+      var text = lines.join('\n').trim();
+      if (!text) return;
+      var pos = getPos(sp);
+      var rPrs = tag(txBody, NS_A, 'rPr');
+      var sz = rPrs.length ? Math.round(parseInt(rPrs[0].getAttribute('sz') || '1800') / 100) : 18;
+      var el = document.createElement('div');
+      el.className = 'slide-txt';
+      el.style.left = pos.x + 'px'; el.style.top = pos.y + 'px';
+      el.style.width = pos.w + 'px'; el.style.height = pos.h + 'px';
+      el.style.fontSize = sz + 'pt';
+      el.textContent = text;
+      div.appendChild(el);
+    });
+
+    return div;
+  }
+
+  function getPos(el) {
+    var xfrms = tag(el, NS_A, 'xfrm');
+    if (!xfrms.length) return { x:0, y:0, w:960, h:540 };
+    var xfrm = xfrms[0];
+    var offs = tag(xfrm, NS_A, 'off');
+    var exts = tag(xfrm, NS_A, 'ext');
+    return {
+      x: px(parseInt(offs.length ? offs[0].getAttribute('x') : 0)),
+      y: px(parseInt(offs.length ? offs[0].getAttribute('y') : 0)),
+      w: px(parseInt(exts.length ? exts[0].getAttribute('cx') : 9144000)),
+      h: px(parseInt(exts.length ? exts[0].getAttribute('cy') : 5143500)),
+    };
+  }
+
+  function showSlideshow() {
+    mediaDiv.innerHTML = '';
+    if (timer) clearInterval(timer);
+
+    var ss = document.createElement('div');
+    ss.id = 'slideshow';
+
+    var wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.width = '960px';
+    wrapper.style.height = '540px';
+
+    function scale() {
+      var s = Math.min(window.innerWidth / 960, window.innerHeight / 540);
+      wrapper.style.transform = 'scale(' + s + ')';
+      wrapper.style.transformOrigin = 'top left';
+      ss.style.alignItems = 'flex-start';
+      ss.style.justifyContent = 'flex-start';
+      var offX = (window.innerWidth  - 960 * s) / 2;
+      var offY = (window.innerHeight - 540 * s) / 2;
+      wrapper.style.marginLeft = offX + 'px';
+      wrapper.style.marginTop  = offY + 'px';
+    }
+    scale();
+    window.addEventListener('resize', scale);
+
+    wrapper.appendChild(slides[cur]);
+    ss.appendChild(wrapper);
+    mediaDiv.appendChild(ss);
+
+    // Nav dots
+    if (slides.length > 1) {
+      var nav = document.createElement('div');
+      nav.id = 'nav';
+      slides.forEach(function(_, idx) {
+        var d = document.createElement('div');
+        d.className = 'dot' + (idx === cur ? ' on' : '');
+        d.onclick = function(){ goto(idx); };
+        nav.appendChild(d);
+      });
+      mediaDiv.appendChild(nav);
+
+      timer = setInterval(function(){ goto((cur + 1) % slides.length); }, 10000);
+
+      document.onkeydown = function(e) {
+        if (e.key === 'ArrowRight' || e.key === ' ') goto((cur + 1) % slides.length);
+        if (e.key === 'ArrowLeft') goto((cur - 1 + slides.length) % slides.length);
+      };
+    }
+
+    function goto(idx) {
+      cur = idx;
+      wrapper.innerHTML = '';
+      wrapper.appendChild(slides[cur]);
+      document.querySelectorAll('.dot').forEach(function(d, i){ d.className = 'dot' + (i===cur?' on':''); });
+    }
+  }
+  </script>
+  <!-- PDF.js loaded as module, exposes window.pdfjsLib -->
+  <script type="module">
+    import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+    window.pdfjsLib = pdfjsLib;
   </script>
 </body>
 </html>

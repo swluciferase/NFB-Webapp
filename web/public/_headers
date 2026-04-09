@@ -1,0 +1,4 @@
+/nfb-feedback.html
+  Content-Security-Policy: default-src * 'unsafe-inline' 'unsafe-eval' blob: data:; frame-src *; media-src *
+  Permissions-Policy: accelerometer=*, autoplay=*, camera=*, encrypted-media=*, fullscreen=*, gyroscope=*, picture-in-picture=*, web-share=*
+  X-Frame-Options: SAMEORIGIN

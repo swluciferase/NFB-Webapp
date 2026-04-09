@@ -1254,8 +1254,10 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
       .replace(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&\s]+)[^\s]*/i, 'https://www.youtube.com/embed/$1?autoplay=1')
       .replace(/(?:https?:\/\/)?(?:www\.)?youtu\.be\/([^?&\s]+)[^\s]*/i, 'https://www.youtube.com/embed/$1?autoplay=1');
 
+    // Auto-prepend https:// if no protocol given
+    const fullUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
     // Use a static page at the same origin so postMessage works and YouTube allows embedding
-    const feedbackPageUrl = new URL('nfb-feedback.html?url=' + encodeURIComponent(url), window.location.href).href;
+    const feedbackPageUrl = new URL('nfb-feedback.html?url=' + encodeURIComponent(fullUrl), window.location.href).href;
     const win = window.open(feedbackPageUrl, 'nfb_feedback_window', 'width=1280,height=800,resizable=yes');
     if (!win) return;
     feedbackWindowRef.current = win;

@@ -77,8 +77,9 @@ const HistCanvas: FC<{
   history: number[];
   threshold: number;
   height?: number;
+  direction?: 'up' | 'down';
   onThresholdChange?: (delta: number) => void;
-}> = ({ history, threshold, height = 42, onThresholdChange }) => {
+}> = ({ history, threshold, height = 42, direction = 'up', onThresholdChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(200);
@@ -109,13 +110,16 @@ const HistCanvas: FC<{
     const barW = Math.floor(w / history.length);
     history.forEach((v, i) => {
       const barH = Math.round((v / max) * (h - 4));
-      ctx.fillStyle = v >= threshold ? 'rgba(63,185,80,0.75)' : 'rgba(88,166,255,0.55)';
+      const met = direction === 'up' ? v >= threshold : v < threshold;
+      ctx.fillStyle = direction === 'up'
+        ? (met ? 'rgba(63,185,80,0.75)' : 'rgba(88,166,255,0.55)')
+        : (met ? 'rgba(248,81,73,0.75)' : 'rgba(88,166,255,0.55)');
       ctx.fillRect(i * barW, h - barH, Math.max(1, barW - 1), barH);
     });
     const ty = Math.round(h - (threshold / max) * (h - 4));
     ctx.strokeStyle = 'rgba(248,129,74,0.85)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(w, ty); ctx.stroke(); ctx.setLineDash([]);
-  }, [history, threshold, canvasWidth]);
+  }, [history, threshold, canvasWidth, direction]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!onThresholdChange) return;
@@ -266,6 +270,7 @@ const EegCard: FC<{
         <HistCanvas
           history={indicator.history}
           threshold={indicator.threshold}
+          direction={indicator.direction}
           onThresholdChange={indicator.autoThreshold ? undefined : (delta) => onThresholdChange(indicator.id, delta)}
         />
       </div>
@@ -406,6 +411,7 @@ const FormulaCard: FC<{
         <HistCanvas
           history={indicator.history}
           threshold={indicator.threshold}
+          direction={indicator.direction}
           onThresholdChange={indicator.autoThreshold ? undefined : (delta) => onThresholdChange(indicator.id, delta)}
         />
       </div>
@@ -498,6 +504,7 @@ const CardiacCard: FC<{
         <HistCanvas
           history={state.history}
           threshold={state.threshold}
+          direction={state.direction}
           onThresholdChange={state.autoThreshold ? undefined : (delta) => onThresholdChange(delta)}
         />
       </div>

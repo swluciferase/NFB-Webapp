@@ -1,10 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { readFileSync } from 'fs'
-
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 
-const pkg = JSON.parse(readFileSync('./package.json', 'utf-8')) as { version: string }
+const APP_VERSION = '0.6.9'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -31,6 +29,6 @@ export default defineConfig({
   ],
   base: './',
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
 })

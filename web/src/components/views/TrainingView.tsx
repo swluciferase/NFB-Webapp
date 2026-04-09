@@ -972,6 +972,12 @@ const DIFFICULTY_LABELS = ['很容易', '容易', '中等', '困難', '很困難
 const W_VALUES = [5, 8, 12, 17, 23] as const;
 const PERSISTENCE_LABELS = ['5 秒', '8 秒', '12 秒', '17 秒', '23 秒'] as const;
 
+/** RMS of an array; returns 0 if empty */
+function computeRMS(values: number[]): number {
+  if (values.length === 0) return 0;
+  return Math.sqrt(values.reduce((acc, v) => acc + v * v, 0) / values.length);
+}
+
 function makeDefaultIndicators(): EegIndicator[] {
   return Array.from({ length: 5 }, (_, i) => ({
     id: i + 1,
@@ -1114,25 +1120,44 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           newVal = evalFormula(ind.formula, liveBandPowerRef.current) ?? ind.value;
         } else {
           const live = getLiveBandPower(ind.channel, ind.band);
-          if (live === null) return { ...ind, history: [...ind.history, ind.value].slice(-HISTORY_LEN) };
+          if (live === null) {
+            const newHistory = [...ind.history, ind.value].slice(-HISTORY_LEN);
+            const newThreshold = ind.autoThreshold
+              ? (computeRMS(newHistory.slice(-W_VALUES[persistenceLevelRef.current - 1])) || ind.threshold)
+              : ind.threshold;
+            return { ...ind, history: newHistory, threshold: newThreshold };
+          }
           newVal = live;
         }
-        return { ...ind, value: newVal, history: [...ind.history, newVal].slice(-HISTORY_LEN) };
+        const newHistory = [...ind.history, newVal].slice(-HISTORY_LEN);
+        const newThreshold = ind.autoThreshold
+          ? (computeRMS(newHistory.slice(-W_VALUES[persistenceLevelRef.current - 1])) || ind.threshold)
+          : ind.threshold;
+        return { ...ind, value: newVal, history: newHistory, threshold: newThreshold };
       }));
 
       // Cardiac — only update if VisioMynd live
       setCardiac(c => {
         if (!c.enabled) return c;
+        const W = W_VALUES[persistenceLevelRef.current - 1];
         if (visioMyndLive && visioMyndLfhf !== null) {
           const next = visioMyndLfhf;
+          const newHistory = [...c.history, next].slice(-HISTORY_LEN);
+          const newThreshold = c.autoThreshold
+            ? (computeRMS(newHistory.slice(-W)) || c.threshold)
+            : c.threshold;
           return {
             ...c, lfHfRatio: next,
             lfValue: next * 0.7 + 0.1, hfValue: Math.max(0.05, 0.7 - next * 0.05 + 0.1),
-            history: [...c.history, next].slice(-HISTORY_LEN),
+            history: newHistory, threshold: newThreshold,
           };
         }
-        // Not live — keep previous, just extend history with current value
-        return { ...c, history: [...c.history, c.lfHfRatio].slice(-HISTORY_LEN) };
+        // Not live — keep previous, just extend history
+        const newHistory = [...c.history, c.lfHfRatio].slice(-HISTORY_LEN);
+        const newThreshold = c.autoThreshold
+          ? (computeRMS(newHistory.slice(-W)) || c.threshold)
+          : c.threshold;
+        return { ...c, history: newHistory, threshold: newThreshold };
       });
 
       // BNB: drift bbCurrentHz when not fixed
@@ -1179,12 +1204,13 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           const overallPct = Math.round(sh.filter(Boolean).length / sessionLen * 100);
           setOverallScore(overallPct);
 
-          // Reward Rate: % of complete tumbling W-second windows where ALL seconds met threshold
+          // Reward Rate: % of complete tumbling W-second windows where AT ≥ 50%
           const completeWindows = Math.floor(sessionLen / W);
           if (completeWindows > 0) {
             let rewardCount = 0;
             for (let wi = 0; wi < completeWindows; wi++) {
-              if (sh.slice(wi * W, (wi + 1) * W).every(Boolean)) rewardCount++;
+              const slice = sh.slice(wi * W, (wi + 1) * W);
+              if (slice.filter(Boolean).length / slice.length >= 0.5) rewardCount++;
             }
             setRewardRate(Math.round(rewardCount / completeWindows * 100));
           }

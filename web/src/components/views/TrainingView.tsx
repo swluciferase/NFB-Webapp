@@ -201,6 +201,7 @@ const EegCard: FC<{
   onAutoThresholdToggle: (id: number) => void;
 }> = ({ indicator, isLive, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle }) => {
   const aboveThreshold = indicator.value >= indicator.threshold;
+  const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
   const selectStyle: React.CSSProperties = {
     background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5,
     color: 'var(--text-primary)', fontSize: 12, padding: '3px 6px', cursor: 'pointer', flex: 1,
@@ -257,7 +258,7 @@ const EegCard: FC<{
         <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
           {isLive ? indicator.value.toFixed(2) : '—'} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>μV²</span>
         </span>
-        <Badge label={aboveThreshold ? (indicator.direction === 'up' ? 'ON' : 'OFF') : (indicator.direction === 'up' ? 'OFF' : 'ON')} color={aboveThreshold ? '#3fb950' : '#f85149'} bg={aboveThreshold ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
+        <Badge label={met ? 'ON' : 'OFF'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
 
       {/* Histogram — drag Y to adjust threshold */}
@@ -345,6 +346,7 @@ const FormulaCard: FC<{
 }> = ({ indicator, isLive, liveBandPower, onToggle, onFormulaChange, onThresholdChange, onAutoThresholdToggle, onDirectionChange }) => {
   const computedValue = isLive ? (evalFormula(indicator.formula, liveBandPower) ?? 0) : 0;
   const aboveThreshold = computedValue >= indicator.threshold;
+  const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
   return (
     <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.25)', borderRadius: 10, padding: '10px 12px', marginBottom: 6, opacity: indicator.enabled ? 1 : 0.55 }}>
       {/* Header */}
@@ -396,7 +398,7 @@ const FormulaCard: FC<{
         <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
           {isLive ? computedValue.toFixed(3) : '—'}
         </span>
-        <Badge label={aboveThreshold ? (indicator.direction === 'up' ? 'ON' : 'OFF') : (indicator.direction === 'up' ? 'OFF' : 'ON')} color={aboveThreshold ? '#3fb950' : '#f85149'} bg={aboveThreshold ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
+        <Badge label={met ? 'ON' : 'OFF'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
 
       {/* Histogram */}
@@ -1236,40 +1238,11 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
       .replace(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&\s]+)[^\s]*/i, 'https://www.youtube.com/embed/$1?autoplay=1')
       .replace(/(?:https?:\/\/)?(?:www\.)?youtu\.be\/([^?&\s]+)[^\s]*/i, 'https://www.youtube.com/embed/$1?autoplay=1');
 
-    // Use a Blob URL so the window has a non-null origin (blob:https://…)
-    // YouTube embed refuses to load inside frames from null/about:blank origins.
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>NFB Feedback</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{width:100vw;height:100vh;overflow:hidden;background:#000}
-  iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
-  #overlay{position:absolute;inset:0;background:#000;opacity:1;pointer-events:none;transition:opacity 0.4s ease}
-</style>
-</head>
-<body>
-  <iframe src="${url.replace(/"/g, '&quot;')}" allow="autoplay; fullscreen; camera; microphone" allowfullscreen></iframe>
-  <div id="overlay"></div>
-  <script>
-    window.addEventListener('message', function(e){
-      var d = e.data;
-      if(d && d.type === 'nfb_overlay'){
-        document.getElementById('overlay').style.opacity = d.opacity;
-      }
-    });
-  </script>
-</body>
-</html>`;
-    const blob = new Blob([html], { type: 'text/html' });
-    const blobUrl = URL.createObjectURL(blob);
-    const win = window.open(blobUrl, 'nfb_feedback_window', 'width=1280,height=800,resizable=yes');
-    if (!win) { URL.revokeObjectURL(blobUrl); return; }
+    // Use a static page at the same origin so postMessage works and YouTube allows embedding
+    const feedbackPageUrl = new URL('nfb-feedback.html?url=' + encodeURIComponent(url), window.location.href).href;
+    const win = window.open(feedbackPageUrl, 'nfb_feedback_window', 'width=1280,height=800,resizable=yes');
+    if (!win) return;
     feedbackWindowRef.current = win;
-    // Revoke blob URL after window has loaded the content
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
     setTimeout(() => applyOverlay(overlayOpacity), 800);
   }, [applyOverlay, overlayOpacity]);
 

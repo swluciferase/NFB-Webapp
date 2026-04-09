@@ -563,6 +563,9 @@ interface BnbState {
   bbMaxHz: number;
   bbCurrentHz: number;
   bnbMethod: BnbMethod;
+  bandLowHz: number;
+  bandHighHz: number;
+  subLayerCarrierHz: number;
   modEnabled: boolean;
   modInterval: number;
   modStep: number;
@@ -584,6 +587,9 @@ const DEFAULT_BNB: BnbState = {
   bbMaxHz: 12,
   bbCurrentHz: 8,
   bnbMethod: 'global-ssb',
+  bandLowHz: 150,
+  bandHighHz: 400,
+  subLayerCarrierHz: 400,
   modEnabled: false,
   modInterval: 500,
   modStep: 0.5,
@@ -852,7 +858,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
         {BNB_BANDS.map(b => (
           <button key={b.label} onClick={() => onChange({ bbMinHz: b.min, bbMaxHz: b.max, bbCurrentHz: (b.min + b.max) / 2, bbFixed: false })}
-            style={{ padding: '3px 7px', borderRadius: 5, border: `1px solid ${bnb.bbCurrentHz >= b.min && bnb.bbCurrentHz <= b.max ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: bnb.bbCurrentHz >= b.min && bnb.bbCurrentHz <= b.max ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: bnb.bbCurrentHz >= b.min && bnb.bbCurrentHz <= b.max ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ padding: '3px 7px', borderRadius: 5, border: `1px solid ${bnb.bbCurrentHz >= b.min && bnb.bbCurrentHz < b.max ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: bnb.bbCurrentHz >= b.min && bnb.bbCurrentHz < b.max ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: bnb.bbCurrentHz >= b.min && bnb.bbCurrentHz < b.max ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
             {b.sym} {b.label}
           </button>
         ))}
@@ -871,16 +877,51 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, background: 'var(--bg-tertiary)', borderRadius: 6, padding: '7px 9px', marginBottom: 6 }}>
         {BNB_METHOD_DESC[bnb.bnbMethod]}
       </div>
-      {/* Carrier freq presets */}
-      <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>Carrier Freq</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
-        {[40, 100, 200, 432, 528, 440].map(hz => (
-          <button key={hz} onClick={() => onChange({ oscFreq: hz })}
-            style={{ padding: '3px 7px', borderRadius: 5, border: `1px solid ${bnb.oscFreq === hz ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: bnb.oscFreq === hz ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: bnb.oscFreq === hz ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            {hz} Hz
-          </button>
-        ))}
-      </div>
+      {/* Method-specific sub-options */}
+      {bnb.bnbMethod === 'band-shift' && (
+        <>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>Carrier Band</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+            {([
+              { label: '150–400', low: 150, high: 400, name: '標準建議' },
+              { label: '100–250', low: 100, high: 250, name: '低頻共鳴' },
+              { label: '200–600', low: 200, high: 600, name: '中頻核心' },
+              { label: '300–700', low: 300, high: 700, name: '高清晰度' },
+            ] as { label: string; low: number; high: number; name: string }[]).map(p => {
+              const active = bnb.bandLowHz === p.low && bnb.bandHighHz === p.high;
+              return (
+                <button key={p.label}
+                  onClick={() => onChange({ bandLowHz: p.low, bandHighHz: p.high, oscFreq: Math.round((p.low + p.high) / 2) })}
+                  style={{ padding: '3px 8px', borderRadius: 5, border: `1px solid ${active ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: active ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: active ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  {p.label} <span style={{ fontSize: 10, opacity: 0.7 }}>({p.name})</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {bnb.bnbMethod === 'sub-layer' && (
+        <>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>Carrier Freq</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+            {([
+              { hz: 140, name: '驅動感' },
+              { hz: 200, name: '標準' },
+              { hz: 250, name: '清晰' },
+              { hz: 400, name: '最佳同步★' },
+            ] as { hz: number; name: string }[]).map(p => {
+              const active = bnb.subLayerCarrierHz === p.hz;
+              return (
+                <button key={p.hz}
+                  onClick={() => onChange({ subLayerCarrierHz: p.hz, oscFreq: p.hz })}
+                  style={{ padding: '3px 8px', borderRadius: 5, border: `1px solid ${active ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: active ? 'rgba(88,166,255,0.18)' : 'var(--bg-tertiary)', color: active ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  {p.hz} Hz <span style={{ fontSize: 10, opacity: 0.7 }}>({p.name})</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* Modulation */}
       <div style={subHeaderStyle as React.CSSProperties}>Modulation</div>
@@ -1108,7 +1149,11 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   }, [getLiveBandPower, visioMyndLive, visioMyndLfhf]);
 
   // ── Open feedback window ──
-  const openFeedbackWindow = useCallback((url: string) => {
+  const openFeedbackWindow = useCallback((rawUrl: string) => {
+    // Auto-convert YouTube watch URLs to embeddable format
+    const url = rawUrl
+      .replace(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&\s]+)[^\s]*/i, 'https://www.youtube.com/embed/$1?autoplay=1')
+      .replace(/(?:https?:\/\/)?(?:www\.)?youtu\.be\/([^?&\s]+)[^\s]*/i, 'https://www.youtube.com/embed/$1?autoplay=1');
     const win = window.open('', 'nfb_feedback_window', 'width=1280,height=800,resizable=yes');
     if (!win) return;
     feedbackWindowRef.current = win;

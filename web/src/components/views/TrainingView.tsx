@@ -1073,10 +1073,14 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const persistenceLevelRef = useRef(1);
   useEffect(() => { persistenceLevelRef.current = persistenceLevel; }, [persistenceLevel]);
 
-  // TA: sliding window of boolean ticks (capped at max W=23), runs from tab entry
-  const taWindowRef = useRef<boolean[]>([]);
-  // Session history: full record of ticks since session start (for Reward Rate + Overall)
-  const sessionHistoryRef = useRef<boolean[]>([]);
+  const [taMode, setTaMode] = useState<'and' | 'average'>('and');
+  const taModeRef = useRef<'and' | 'average'>('and');
+  useEffect(() => { taModeRef.current = taMode; }, [taMode]);
+
+  // TA: sliding window of per-tick fractions (0/1 for AND, metCount/total for Average), capped at max W=23
+  const taWindowRef = useRef<number[]>([]);
+  // Session history: per-tick fractions since session start (for Reward Rate + Overall)
+  const sessionHistoryRef = useRef<number[]>([]);
 
   const feedbackWindowRef = useRef<Window | null>(null);
 
@@ -1189,37 +1193,42 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
       // TA & session stats — runs every second from tab entry
       setIndicators(current => {
         const enabled = current.filter(i => i.enabled);
-        // A tick is "target achieved" when ALL enabled indicators meet their direction condition
-        const thisTick = enabled.length > 0 && enabled.every(i =>
-          i.direction === 'up' ? i.value >= i.threshold : i.value < i.threshold
-        );
+        const totalEnabled = enabled.length;
+        const metCount = totalEnabled > 0
+          ? enabled.filter(i => i.direction === 'up' ? i.value >= i.threshold : i.value < i.threshold).length
+          : 0;
+        // AND: all indicators must meet → 1 or 0; Average: fraction of met indicators
+        const tickFraction = totalEnabled === 0 ? 0
+          : taModeRef.current === 'and'
+            ? (metCount === totalEnabled ? 1 : 0)
+            : metCount / totalEnabled;
 
-        // Sliding window TA (capped at max W = 23 seconds)
-        taWindowRef.current.push(thisTick);
+        // Sliding window TA: mean of per-tick fractions over last W seconds × 100%
+        taWindowRef.current.push(tickFraction);
         if (taWindowRef.current.length > 23) taWindowRef.current.shift();
         const W = W_VALUES[persistenceLevelRef.current - 1];
         const win = taWindowRef.current.slice(-W);
         const taPct = win.length > 0
-          ? Math.round(win.filter(Boolean).length / win.length * 100)
+          ? Math.round(win.reduce((a, b) => a + b, 0) / win.length * 100)
           : 0;
         setTargetAchievementPct(taPct);
 
         if (sessionRunningRef.current) {
-          sessionHistoryRef.current.push(thisTick);
+          sessionHistoryRef.current.push(tickFraction);
           const sh = sessionHistoryRef.current;
           const sessionLen = sh.length;
 
-          // Overall: % of session seconds where target was achieved
-          const overallPct = Math.round(sh.filter(Boolean).length / sessionLen * 100);
+          // Overall: mean fraction across entire session × 100%
+          const overallPct = Math.round(sh.reduce((a, b) => a + b, 0) / sessionLen * 100);
           setOverallScore(overallPct);
 
-          // Reward Rate: % of complete tumbling W-second windows where TA ≥ 50%
+          // Reward Rate: % of complete W-second windows where mean fraction ≥ 50%
           const completeWindows = Math.floor(sessionLen / W);
           if (completeWindows > 0) {
             let rewardCount = 0;
             for (let wi = 0; wi < completeWindows; wi++) {
               const slice = sh.slice(wi * W, (wi + 1) * W);
-              if (slice.filter(Boolean).length / slice.length >= 0.5) rewardCount++;
+              if (slice.reduce((a, b) => a + b, 0) / slice.length >= 0.5) rewardCount++;
             }
             setRewardRate(Math.round(rewardCount / completeWindows * 100));
           }
@@ -1393,6 +1402,19 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
               <span>最容易 (5s)</span><span>最困難 (23s)</span>
             </div>
+          </div>
+          {/* TA mode toggle */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            {(['and', 'average'] as const).map(m => (
+              <button key={m} onClick={() => setTaMode(m)} style={{
+                flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                border: `1px solid ${taMode === m ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`,
+                background: taMode === m ? 'rgba(88,166,255,0.15)' : 'var(--bg-secondary)',
+                color: taMode === m ? '#58a6ff' : 'var(--text-secondary)',
+              }}>
+                {m === 'and' ? 'All or None' : 'Average'}
+              </button>
+            ))}
           </div>
         </div>
 

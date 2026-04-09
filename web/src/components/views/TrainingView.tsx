@@ -1368,7 +1368,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>活躍度</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#f9a02e', fontFamily: 'ui-monospace,monospace' }}>
                 Lv.{difficultyLevel} {DIFFICULTY_LABELS[difficultyLevel - 1]} &nbsp;
-                <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>K={K_VALUES[difficultyLevel - 1]}</span>
+                <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>AT={[36,49,62,75,88][difficultyLevel - 1]}%</span>
               </span>
             </div>
             <input type="range" min={1} max={5} step={1} value={difficultyLevel}

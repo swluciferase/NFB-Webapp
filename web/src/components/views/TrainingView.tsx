@@ -40,63 +40,63 @@ const PRESET_OPTIONS: PresetOption[] = [
   {
     value: 'tbr',
     label: { zh: '① 注意力提升 (TBR)（Fz）', en: '① Attention (TBR) (Fz)' },
-    info: { zh: '這是 ADHD 訓練最常用的指標，值越高代表專注度越高。\n算式：Fz_Beta / Fz_Theta', en: 'Most common ADHD training index. Higher = more focused.\nFormula: Fz_Beta / (Fz_Theta + 0.001)' },
+    info: { zh: '這是 ADHD 訓練最常用的指標，值越高代表專注度越高。', en: 'Most common ADHD training index. Higher = more focused.' },
     formula: 'Fz_Beta / (Fz_Theta + 0.001)',
     direction: 'up',
   },
   {
     value: 'alpha_relax',
     label: { zh: '② 深度放鬆 (Alpha)（O1, O2）', en: '② Deep Relaxation (Alpha) (O1, O2)' },
-    info: { zh: '閉眼訓練效果最佳，數值越高代表大腦進入節能放鬆狀態。\n算式：(O1_Alpha + O2_Alpha) / 2', en: 'Best with eyes closed. Higher = deeper relaxation.\nFormula: (O1_Alpha + O2_Alpha) / 2' },
+    info: { zh: '閉眼訓練效果最佳，數值越高代表大腦進入節能放鬆狀態。', en: 'Best with eyes closed. Higher = deeper relaxation.' },
     formula: '(O1_Alpha + O2_Alpha) / 2',
     direction: 'up',
   },
   {
     value: 'asymmetry',
     label: { zh: '③ 情緒平衡 (Asymmetry)（Fp1/2, T7/8）', en: '③ Emotional Balance (Asymmetry) (Fp1/2, T7/8)' },
-    info: { zh: '當右額葉 Alpha 高於左額葉，代表左腦較活躍，通常與正向情緒相關。\n算式：(Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)', en: 'Higher right-hemisphere Alpha = more positive affect.\nFormula: (Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)' },
+    info: { zh: '當右額葉 Alpha 高於左額葉，代表左腦較活躍，通常與正向情緒相關。', en: 'Higher right-hemisphere Alpha = more positive affect.' },
     formula: '(Fp2_Alpha + T8_Alpha) / (Fp1_Alpha + T7_Alpha)',
     direction: 'up',
   },
   {
     value: 'smr',
     label: { zh: '④ 身心穩定 (SMR)（Fz）', en: '④ Calm Alertness (SMR) (Fz)' },
-    info: { zh: '提升運動覺節律，訓練在冷靜中保持警覺，適合緩解過動。\n算式：Fz_SMR', en: 'Trains sensorimotor rhythm — calm yet alert, helps hyperactivity.\nFormula: Fz_SMR' },
+    info: { zh: '提升運動覺節律，訓練在冷靜中保持警覺，適合緩解過動。', en: 'Trains sensorimotor rhythm — calm yet alert, helps hyperactivity.' },
     formula: 'Fz_SMR',
     direction: 'up',
   },
   {
     value: 'beta_logic',
     label: { zh: '⑤ 邏輯執行力 (Beta)（Fp1, T7）', en: '⑤ Logic & Executive (Beta) (Fp1, T7)' },
-    info: { zh: '強化左額葉的認知處理能力，有助於邏輯運算與決策。\n算式：(Fp1_Beta + T7_Beta) / 2', en: 'Strengthens left-frontal cognition for logic and decision-making.\nFormula: (Fp1_Beta + T7_Beta) / 2' },
+    info: { zh: '強化左額葉的認知處理能力，有助於邏輯運算與決策。', en: 'Strengthens left-frontal cognition for logic and decision-making.' },
     formula: '(Fp1_Beta + T7_Beta) / 2',
     direction: 'up',
   },
   {
     value: 'theta_alpha',
     label: { zh: '⑥ 創造力/內省 (T/A)（Pz）', en: '⑥ Creativity / Insight (T/A) (Pz)' },
-    info: { zh: '訓練進入 Theta 與 Alpha 的交界，常見於深度冥想或藝術創作訓練。\n算式：Pz_Theta / Pz_Alpha', en: 'Theta-Alpha boundary — associated with deep meditation or creative flow.\nFormula: Pz_Theta / (Pz_Alpha + 0.001)' },
+    info: { zh: '訓練進入 Theta 與 Alpha 的交界，常見於深度冥想或藝術創作訓練。', en: 'Theta-Alpha boundary — associated with deep meditation or creative flow.' },
     formula: 'Pz_Theta / (Pz_Alpha + 0.001)',
     direction: 'up',
   },
   {
     value: 'gamma',
     label: { zh: '⑦ 認知統合 (Gamma)（Fp1, Fp2）', en: '⑦ Cognitive Integration (Gamma) (Fp1, Fp2)' },
-    info: { zh: '針對高階訊息整合與領悟力提升，訓練大腦的高頻同步。\n算式：(Fp1_Gamma + Fp2_Gamma) / 2', en: 'High-frequency synchrony for insight and information integration.\nFormula: (Fp1_Gamma + Fp2_Gamma) / 2' },
+    info: { zh: '針對高階訊息整合與領悟力提升，訓練大腦的高頻同步。', en: 'High-frequency synchrony for insight and information integration.' },
     formula: '(Fp1_Gamma + Fp2_Gamma) / 2',
     direction: 'up',
   },
   {
     value: 'hibeta_anx',
     label: { zh: '⑧ 焦慮控制 (High-Beta)（T7, Pz, T8）', en: '⑧ Anxiety Control (High-Beta) (T7, Pz, T8)' },
-    info: { zh: '抑制後頂葉的高頻 Beta 波 (20-30Hz)，數值越高代表越不焦慮。\n算式：4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)', en: 'Suppresses posterior high-Beta (20-30 Hz). Higher = less anxious.\nFormula: 4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)' },
+    info: { zh: '抑制後頂葉的高頻 Beta 波 (20-30Hz)，數值越高代表越不焦慮。', en: 'Suppresses posterior high-Beta (20-30 Hz). Higher = less anxious.' },
     formula: '4 / (T7_HiBeta + 2 * Pz_HiBeta + T8_HiBeta)',
     direction: 'up',
   },
   {
     value: 'fm_theta',
     label: { zh: '⑨ 心流狀態 (Fm-Theta)（Fz）', en: '⑨ Flow State (Fm-Theta) (Fz)' },
-    info: { zh: '針對前額葉正中 Theta 波，數值越高代表在複雜任務中的專注流動感越強。\n算式：Fz_Theta', en: 'Frontal midline Theta — higher = stronger focus-flow in complex tasks.\nFormula: Fz_Theta' },
+    info: { zh: '針對前額葉正中 Theta 波，數值越高代表在複雜任務中的專注流動感越強。', en: 'Frontal midline Theta — higher = stronger focus-flow in complex tasks.' },
     formula: 'Fz_Theta',
     direction: 'up',
   },
@@ -329,15 +329,8 @@ const EegCard: FC<{
         )}
       </div>
 
-      {/* Formula display (preset) OR Channel + Band selectors (custom) */}
-      {activePreset ? (
-        <div style={{
-          marginBottom: 8, padding: '3px 7px', background: 'var(--bg-tertiary)',
-          borderRadius: 4, border: '1px solid rgba(88,166,255,0.15)',
-          fontSize: 10, color: 'rgba(88,166,255,0.55)', fontFamily: 'ui-monospace,monospace',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>{activePreset.formula}</div>
-      ) : (
+      {/* Channel + Band selectors (custom only) */}
+      {!activePreset && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
           <select value={indicator.channel} onChange={e => onChannelChange(indicator.id, e.target.value as Channel)} style={selectStyle}>
             {CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}

@@ -964,9 +964,13 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
 
 const HISTORY_LEN = 60;
 
-// Difficulty levels: K constant for OO = K - 10*sqrt(AT)
-const K_VALUES = [36, 49, 62, 75, 88] as const; // 1=easiest … 5=hardest
+// 活躍度 (Activity): K constant for OO = K - 10*sqrt(AT)
+const K_VALUES = [36, 49, 62, 75, 88] as const;
 const DIFFICULTY_LABELS = ['很容易', '容易', '中等', '困難', '很困難'] as const;
+
+// 持續度 (Persistence): moving-window size in seconds
+const W_VALUES = [5, 8, 12, 17, 23] as const;
+const PERSISTENCE_LABELS = ['5 秒', '8 秒', '12 秒', '17 秒', '23 秒'] as const;
 
 function makeDefaultIndicators(): EegIndicator[] {
   return Array.from({ length: 5 }, (_, i) => ({
@@ -1049,10 +1053,16 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const [operatorNotes, setOperatorNotes] = useState('');
   const [overallScore, setOverallScore] = useState(0);
   const [overlayOpacity, setOverlayOpacity] = useState(0);
-  const [difficultyLevel, setDifficultyLevel] = useState(3); // 1–5
+  const [difficultyLevel, setDifficultyLevel] = useState(3); // 1–5 活躍度
+  const [persistenceLevel, setPersistenceLevel] = useState(1); // 1–5 持續度
+  const persistenceLevelRef = useRef(1);
+  useEffect(() => { persistenceLevelRef.current = persistenceLevel; }, [persistenceLevel]);
 
-  const aboveCountRef = useRef(0);
-  const totalCountRef = useRef(0);
+  // AT: sliding window of boolean ticks (capped at max W=23), runs from tab entry
+  const atWindowRef = useRef<boolean[]>([]);
+  // Session history: full record of ticks since session start (for Reward Rate + Overall)
+  const sessionHistoryRef = useRef<boolean[]>([]);
+
   const feedbackWindowRef = useRef<Window | null>(null);
 
   const sendToFeedbackWindow = useCallback((data: Record<string, unknown>) => {
@@ -1142,18 +1152,44 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
         return { ...b, bbCurrentHz: Math.max(b.bbMinHz, Math.min(b.bbMaxHz, b.bbCurrentHz + step * 0.1)) };
       });
 
-      // AT accumulation — runs continuously from tab entry (not just during session)
+      // AT & session stats — runs every second from tab entry
       setIndicators(current => {
         const enabled = current.filter(i => i.enabled);
-        const above = enabled.filter(i => i.value >= i.threshold).length;
-        totalCountRef.current += Math.max(enabled.length, 1);
-        aboveCountRef.current += above;
-        const pct = Math.round((aboveCountRef.current / totalCountRef.current) * 100);
-        setAboveThresholdPct(pct);
+        // A tick is "above threshold" when ALL enabled indicators meet their direction condition
+        const thisTick = enabled.length > 0 && enabled.every(i =>
+          i.direction === 'up' ? i.value >= i.threshold : i.value < i.threshold
+        );
+
+        // Sliding window AT (capped at max W = 23 seconds)
+        atWindowRef.current.push(thisTick);
+        if (atWindowRef.current.length > 23) atWindowRef.current.shift();
+        const W = W_VALUES[persistenceLevelRef.current - 1];
+        const win = atWindowRef.current.slice(-W);
+        const atPct = win.length > 0
+          ? Math.round(win.filter(Boolean).length / win.length * 100)
+          : 0;
+        setAboveThresholdPct(atPct);
+
         if (sessionRunningRef.current) {
-          setRewardRate(Math.round(pct * 0.85));
-          setOverallScore(Math.min(100, Math.round(pct * 0.9)));
-          sendToFeedbackWindowRef.current({ type: 'nfb_status', pct, duration: sessionDurationRef.current });
+          sessionHistoryRef.current.push(thisTick);
+          const sh = sessionHistoryRef.current;
+          const sessionLen = sh.length;
+
+          // Overall: % of session seconds where threshold was met
+          const overallPct = Math.round(sh.filter(Boolean).length / sessionLen * 100);
+          setOverallScore(overallPct);
+
+          // Reward Rate: % of complete tumbling W-second windows where ALL seconds met threshold
+          const completeWindows = Math.floor(sessionLen / W);
+          if (completeWindows > 0) {
+            let rewardCount = 0;
+            for (let wi = 0; wi < completeWindows; wi++) {
+              if (sh.slice(wi * W, (wi + 1) * W).every(Boolean)) rewardCount++;
+            }
+            setRewardRate(Math.round(rewardCount / completeWindows * 100));
+          }
+
+          sendToFeedbackWindowRef.current({ type: 'nfb_status', pct: atPct, duration: sessionDurationRef.current });
         }
         return current;
       });
@@ -1212,7 +1248,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   }, [applyOverlay, overlayOpacity]);
 
   const handleStartSession = useCallback(() => {
-    // Keep aboveCountRef / totalCountRef — pre-session warmup data stabilises AT from the start
+    sessionHistoryRef.current = []; // reset session-specific history
     setSessionDuration(0);
     setRewardRate(0);
     setOverallScore(0);
@@ -1320,10 +1356,10 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               ))}
             </div>
           </div>
-          {/* Difficulty slider */}
-          <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '8px 10px' }}>
+          {/* 活躍度 slider */}
+          <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '8px 10px', marginBottom: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>難易度</span>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>活躍度</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#f9a02e', fontFamily: 'ui-monospace,monospace' }}>
                 Lv.{difficultyLevel} {DIFFICULTY_LABELS[difficultyLevel - 1]} &nbsp;
                 <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>K={K_VALUES[difficultyLevel - 1]}</span>
@@ -1335,8 +1371,21 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
               <span>最容易</span><span>最困難</span>
             </div>
-            <div style={{ fontSize: 10, color: 'rgba(140,160,185,0.6)', marginTop: 4, textAlign: 'center' }}>
-              OO = {K_VALUES[difficultyLevel - 1]} − 10√AT &nbsp;→&nbsp; <span style={{ color: '#58a6ff', fontFamily: 'ui-monospace,monospace' }}>{overlayOpacity}%</span>
+          </div>
+          {/* 持續度 slider */}
+          <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '8px 10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>持續度</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#85e89d', fontFamily: 'ui-monospace,monospace' }}>
+                Lv.{persistenceLevel} {PERSISTENCE_LABELS[persistenceLevel - 1]} &nbsp;
+                <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>window</span>
+              </span>
+            </div>
+            <input type="range" min={1} max={5} step={1} value={persistenceLevel}
+              onChange={e => setPersistenceLevel(parseInt(e.target.value))}
+              style={{ width: '100%', accentColor: '#85e89d' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
+              <span>最容易 (5s)</span><span>最困難 (23s)</span>
             </div>
           </div>
         </div>

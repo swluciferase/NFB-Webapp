@@ -1062,7 +1062,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   // Session
   const [sessionRunning, setSessionRunning] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
-  const [aboveThresholdPct, setAboveThresholdPct] = useState(0);
+  const [targetAchievementPct, setTargetAchievementPct] = useState(0);
   const [rewardRate, setRewardRate] = useState(0);
   const [feedbackUrl, setFeedbackUrl] = useState('');
   const [operatorNotes, setOperatorNotes] = useState('');
@@ -1073,8 +1073,8 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const persistenceLevelRef = useRef(1);
   useEffect(() => { persistenceLevelRef.current = persistenceLevel; }, [persistenceLevel]);
 
-  // AT: sliding window of boolean ticks (capped at max W=23), runs from tab entry
-  const atWindowRef = useRef<boolean[]>([]);
+  // TA: sliding window of boolean ticks (capped at max W=23), runs from tab entry
+  const taWindowRef = useRef<boolean[]>([]);
   // Session history: full record of ticks since session start (for Reward Rate + Overall)
   const sessionHistoryRef = useRef<boolean[]>([]);
 
@@ -1090,14 +1090,14 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     sendToFeedbackWindow({ type: 'nfb_overlay', opacity: 1 - opacityPct / 100 });
   }, [sendToFeedbackWindow]);
 
-  // Auto-compute overlay opacity from AT: OO = K * sqrt(AT), clamped 0–100
+  // Auto-compute overlay opacity from TA: OO = K * sqrt(TA), clamped 0–100
   // Runs always so dashboard shows live OO; applyOverlay only affects feedback window (no-op when closed)
   useEffect(() => {
     const k = K_VALUES[difficultyLevel - 1]!;
-    const oo = Math.max(0, Math.min(100, Math.round(k * Math.sqrt(aboveThresholdPct))));
+    const oo = Math.max(0, Math.min(100, Math.round(k * Math.sqrt(targetAchievementPct))));
     setOverlayOpacity(oo);
     if (sessionRunning) applyOverlay(oo);
-  }, [aboveThresholdPct, difficultyLevel, sessionRunning, applyOverlay]);
+  }, [targetAchievementPct, difficultyLevel, sessionRunning, applyOverlay]);
 
   // Lookup live band power via ref (avoids stale closure)
   const getLiveBandPower = useCallback((channel: Channel, band: Band): number | null => {
@@ -1186,34 +1186,34 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
         return { ...b, bbCurrentHz: Math.max(b.bbMinHz, Math.min(b.bbMaxHz, b.bbCurrentHz + step * 0.1)) };
       });
 
-      // AT & session stats — runs every second from tab entry
+      // TA & session stats — runs every second from tab entry
       setIndicators(current => {
         const enabled = current.filter(i => i.enabled);
-        // A tick is "above threshold" when ALL enabled indicators meet their direction condition
+        // A tick is "target achieved" when ALL enabled indicators meet their direction condition
         const thisTick = enabled.length > 0 && enabled.every(i =>
           i.direction === 'up' ? i.value >= i.threshold : i.value < i.threshold
         );
 
-        // Sliding window AT (capped at max W = 23 seconds)
-        atWindowRef.current.push(thisTick);
-        if (atWindowRef.current.length > 23) atWindowRef.current.shift();
+        // Sliding window TA (capped at max W = 23 seconds)
+        taWindowRef.current.push(thisTick);
+        if (taWindowRef.current.length > 23) taWindowRef.current.shift();
         const W = W_VALUES[persistenceLevelRef.current - 1];
-        const win = atWindowRef.current.slice(-W);
-        const atPct = win.length > 0
+        const win = taWindowRef.current.slice(-W);
+        const taPct = win.length > 0
           ? Math.round(win.filter(Boolean).length / win.length * 100)
           : 0;
-        setAboveThresholdPct(atPct);
+        setTargetAchievementPct(taPct);
 
         if (sessionRunningRef.current) {
           sessionHistoryRef.current.push(thisTick);
           const sh = sessionHistoryRef.current;
           const sessionLen = sh.length;
 
-          // Overall: % of session seconds where threshold was met
+          // Overall: % of session seconds where target was achieved
           const overallPct = Math.round(sh.filter(Boolean).length / sessionLen * 100);
           setOverallScore(overallPct);
 
-          // Reward Rate: % of complete tumbling W-second windows where AT ≥ 50%
+          // Reward Rate: % of complete tumbling W-second windows where TA ≥ 50%
           const completeWindows = Math.floor(sessionLen / W);
           if (completeWindows > 0) {
             let rewardCount = 0;
@@ -1224,7 +1224,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
             setRewardRate(Math.round(rewardCount / completeWindows * 100));
           }
 
-          sendToFeedbackWindowRef.current({ type: 'nfb_status', pct: atPct, duration: sessionDurationRef.current });
+          sendToFeedbackWindowRef.current({ type: 'nfb_status', pct: taPct, duration: sessionDurationRef.current });
         }
         return current;
       });
@@ -1351,7 +1351,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
             <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
                 { label: 'Duration', value: formatDuration(sessionDuration) },
-                { label: 'Above Threshold', value: `${aboveThresholdPct}%` },
+                { label: 'Target Achievement', value: `${targetAchievementPct}%` },
                 { label: 'Reward Rate', value: `${rewardRate}%` },
                 { label: 'Overlay Opacity', value: `${overlayOpacity}%` },
               ].map(item => (
@@ -1368,7 +1368,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>活躍度</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#f9a02e', fontFamily: 'ui-monospace,monospace' }}>
                 Lv.{difficultyLevel} {DIFFICULTY_LABELS[difficultyLevel - 1]} &nbsp;
-                <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>AT={[36,49,62,75,88][difficultyLevel - 1]}%</span>
+                <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>TA={[36,49,62,75,88][difficultyLevel - 1]}%</span>
               </span>
             </div>
             <input type="range" min={1} max={5} step={1} value={difficultyLevel}

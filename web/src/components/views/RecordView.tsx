@@ -237,7 +237,7 @@ export const RecordView: FC<RecordViewProps> = ({
       setFileStatus('analyzing');
       let result;
       try {
-        result = await analyzeEeg(parsed.samples, fileDob, useArtifactRemoval);
+        result = await analyzeEeg(parsed.samples, fileDob || subjectInfo.dob || '', useArtifactRemoval);
       } catch (wasmErr) {
         console.error('analyzeEeg threw:', wasmErr);
         setFileStatus('error');

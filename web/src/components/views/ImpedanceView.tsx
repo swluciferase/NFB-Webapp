@@ -24,11 +24,9 @@ const ELECTRODE_POSITIONS: { label: string; cx: number; cy: number }[] = [
   { label: 'Pz',  cx: 100, cy: 148 },
 ];
 
-// AC amplitude threshold below which we consider the electrode unconnected / no signal
 const NO_SIGNAL_AMPLITUDE_UV = 0.5;
-const LOW_IMPEDANCE_NA_KOHM = 10; // readings below this indicate no electrode contact
+const LOW_IMPEDANCE_NA_KOHM = 10;
 
-// Quality thresholds (KΩ): <150 = excellent, <300 = good, <600 = poor, ≥600 = bad
 function getQuality(kohm: number): ImpedanceResult['quality'] {
   if (kohm < 150) return 'excellent';
   if (kohm < 300) return 'good';
@@ -67,7 +65,6 @@ export const ImpedanceView: FC<ImpedanceViewProps> = ({
 }) => {
   const [isActive, setIsActive] = useState(false);
 
-  // Map results by channel index (0-based, matches ELECTRODE_POSITIONS order)
   const resultByIndex = new Map<number, ImpedanceResult>();
   if (impedanceResults) {
     for (const r of impedanceResults) {
@@ -86,325 +83,167 @@ export const ImpedanceView: FC<ImpedanceViewProps> = ({
     }
   };
 
+  const btnStyle: React.CSSProperties = {
+    padding: '.16rem .42rem',
+    border: `1px solid ${isActive ? 'rgba(106,170,128,.5)' : 'rgba(94,88,112,.4)'}`,
+    borderRadius: 1,
+    background: 'transparent',
+    cursor: (isConnected && !isRecording) ? 'pointer' : 'not-allowed',
+    fontFamily: 'inherit',
+    fontSize: '.52rem',
+    letterSpacing: '.08em',
+    color: isActive ? 'var(--green)' : 'var(--muted)',
+    opacity: (isConnected && !isRecording) ? 1 : 0.4,
+    transition: 'all .15s',
+    whiteSpace: 'nowrap' as const,
+    marginLeft: 'auto',
+    flexShrink: 0,
+  };
+
+  const legendItems = [
+    { color: 'var(--green)',  label: lang === 'zh' ? '優秀' : 'Excellent', range: '<150k' },
+    { color: '#85e89d',       label: lang === 'zh' ? '良好' : 'Good',      range: '<300k' },
+    { color: 'var(--amber)',  label: lang === 'zh' ? '尚可' : 'Fair',      range: '<600k' },
+    { color: 'var(--red)',    label: lang === 'zh' ? '不良' : 'Poor',      range: '≥600k' },
+  ];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      flex: 1, minHeight: 0, overflow: 'hidden',
+      background: 'var(--bg2)',
+      border: '1px solid var(--border)',
+      borderRadius: 2,
+      padding: '.52rem .58rem',
+    }}>
 
-      {/* Toolbar */}
+      {/* ── Title + toggle button ── */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 16px',
-        background: 'rgba(5,14,23,0.8)',
-        border: '1px solid rgba(93,109,134,0.3)',
-        borderRadius: 10,
-        flexWrap: 'wrap',
-        gap: 10,
+        fontSize: '.6rem', letterSpacing: '.15em', textTransform: 'uppercase',
+        color: 'var(--cream)', marginBottom: '.35rem',
+        paddingBottom: '.22rem', borderBottom: '1px solid rgba(178,168,198,.1)',
+        display: 'flex', alignItems: 'center', gap: '.32rem', flexShrink: 0,
       }}>
-        <span style={{ color: 'rgba(180,200,230,0.85)', fontSize: '0.95rem', fontWeight: 600 }}>
-          {T(lang, 'impedanceTitle')}
-        </span>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {!isConnected && (
-            <span style={{ fontSize: 12, color: 'rgba(248,81,73,0.8)' }}>
-              {T(lang, 'impedanceNotConnected')}
-            </span>
-          )}
-          {isRecording && (
-            <span style={{ fontSize: 12, color: 'rgba(248,81,73,0.8)' }}>
-              {T(lang, 'impedanceBlockedByRecording')}
-            </span>
-          )}
-          <button
-            onClick={handleToggle}
-            disabled={!isConnected || isRecording}
-            style={{
-              background: isActive
-                ? 'rgba(248,81,73,0.18)'
-                : 'rgba(63,185,80,0.15)',
-              border: `1px solid ${isActive ? 'rgba(248,81,73,0.5)' : 'rgba(63,185,80,0.45)'}`,
-              borderRadius: 8,
-              color: isActive ? '#f85149' : '#3fb950',
-              fontSize: 13,
-              fontWeight: 600,
-              padding: '8px 18px',
-              cursor: (isConnected && !isRecording) ? 'pointer' : 'not-allowed',
-              opacity: (isConnected && !isRecording) ? 1 : 0.4,
-              transition: 'all 0.15s',
-            }}
-          >
-            {isActive ? T(lang, 'impedanceStop') : T(lang, 'impedanceStart')}
-          </button>
-        </div>
+        <span style={{ fontFamily: "'Crimson Pro','Georgia',serif", fontStyle: 'italic', fontSize: '.88rem', color: 'var(--plum)', lineHeight: 1 }}>∘</span>
+        <span>{T(lang, 'impedanceTitle')}</span>
+        {!isConnected && (
+          <span style={{ fontSize: '.5rem', color: 'var(--red)', marginLeft: '.3rem' }}>
+            {T(lang, 'impedanceNotConnected')}
+          </span>
+        )}
+        {isRecording && (
+          <span style={{ fontSize: '.5rem', color: 'var(--amber)', marginLeft: '.3rem' }}>
+            {T(lang, 'impedanceBlockedByRecording')}
+          </span>
+        )}
+        <button onClick={handleToggle} disabled={!isConnected || isRecording} style={btnStyle}>
+          {isActive ? T(lang, 'impedanceStop') : T(lang, 'impedanceStart')}
+        </button>
       </div>
 
-      {/* Main content */}
-      <div style={{ display: 'flex', gap: 20, flex: 1, minHeight: 0 }}>
+      {/* ── SVG head diagram — fills available space ── */}
+      <svg
+        viewBox="0 0 200 240"
+        style={{ display: 'block', width: '100%', flex: 1, minHeight: 0, height: 0 }}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        {/* Head outline — oval */}
+        <ellipse cx="100" cy="118" rx="88" ry="106"
+          fill="rgba(14,20,30,.8)"
+          stroke="rgba(94,88,112,.38)"
+          strokeWidth="1.5"
+        />
+        {/* Nose */}
+        <path d="M93 16 Q100 8 107 16"
+          fill="none" stroke="rgba(94,88,112,.32)" strokeWidth="1.5"
+        />
+        {/* Left ear */}
+        <path d="M12 100 Q4 112 12 124"
+          fill="none" stroke="rgba(94,88,112,.32)" strokeWidth="1.5"
+        />
+        {/* Right ear */}
+        <path d="M188 100 Q196 112 188 124"
+          fill="none" stroke="rgba(94,88,112,.32)" strokeWidth="1.5"
+        />
+        {/* Center cross lines */}
+        <line x1="100" y1="14" x2="100" y2="224"
+          stroke="rgba(94,88,112,.13)" strokeWidth="1" strokeDasharray="4 4"
+        />
+        <line x1="12" y1="118" x2="188" y2="118"
+          stroke="rgba(94,88,112,.13)" strokeWidth="1" strokeDasharray="4 4"
+        />
 
-        {/* SVG head diagram */}
-        <div
-          className="nd-card"
-          style={{
-            '--card-accent': 'rgba(88,166,255,0.3)',
-            flex: '0 0 auto',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            marginBottom: 0,
-          } as React.CSSProperties}
-        >
-          <svg
-            viewBox="0 0 200 240"
-            width="260"
-            height="312"
-            style={{ display: 'block' }}
-          >
-            {/* Head outline — oval */}
-            <ellipse cx="100" cy="118" rx="88" ry="106"
-              fill="rgba(14,26,44,0.8)"
-              stroke="rgba(93,109,134,0.55)"
-              strokeWidth="1.5"
-            />
-            {/* Nose */}
-            <path d="M93 16 Q100 8 107 16"
-              fill="none"
-              stroke="rgba(93,109,134,0.4)"
-              strokeWidth="1.5"
-            />
-            {/* Left ear */}
-            <path d="M12 100 Q4 112 12 124"
-              fill="none"
-              stroke="rgba(93,109,134,0.4)"
-              strokeWidth="1.5"
-            />
-            {/* Right ear */}
-            <path d="M188 100 Q196 112 188 124"
-              fill="none"
-              stroke="rgba(93,109,134,0.4)"
-              strokeWidth="1.5"
-            />
-            {/* Center cross lines */}
-            <line x1="100" y1="14" x2="100" y2="224"
-              stroke="rgba(93,109,134,0.2)"
-              strokeWidth="1"
-              strokeDasharray="4 4"
-            />
-            <line x1="12" y1="118" x2="188" y2="118"
-              stroke="rgba(93,109,134,0.2)"
-              strokeWidth="1"
-              strokeDasharray="4 4"
-            />
+        {/* Electrode nodes */}
+        {ELECTRODE_POSITIONS.map((pos, idx) => {
+          const result = resultByIndex.get(idx);
+          const kohm = result?.impedanceKohm;
+          const isNoSignal = result !== undefined && (
+            (result.acAmplitude ?? 0) < NO_SIGNAL_AMPLITUDE_UV ||
+            result.impedanceKohm < LOW_IMPEDANCE_NA_KOHM
+          );
+          const quality: ImpedanceResult['quality'] | 'unknown' | 'noSignal' =
+            result === undefined ? 'unknown'
+            : isNoSignal ? 'noSignal'
+            : getQuality(kohm!);
+          const color = qualityColor(quality);
+          const isDim = quality === 'unknown' || quality === 'noSignal';
 
-            {/* Electrode nodes */}
-            {ELECTRODE_POSITIONS.map((pos, idx) => {
-              const result = resultByIndex.get(idx);
-              const kohm = result?.impedanceKohm;
-              const isNoSignal = result !== undefined && (
-                (result.acAmplitude ?? 0) < NO_SIGNAL_AMPLITUDE_UV ||
-                result.impedanceKohm < LOW_IMPEDANCE_NA_KOHM
-              );
-              const quality: ImpedanceResult['quality'] | 'unknown' | 'noSignal' =
-                result === undefined ? 'unknown'
-                : isNoSignal ? 'noSignal'
-                : getQuality(kohm!);
-              const color = qualityColor(quality);
-              const isDim = quality === 'unknown' || quality === 'noSignal';
-
-              return (
-                <g key={pos.label}>
-                  {/* Glow ring */}
-                  {!isDim && (
-                    <circle
-                      cx={pos.cx} cy={pos.cy}
-                      r={16}
-                      fill="none"
-                      stroke={color}
-                      strokeWidth="1"
-                      opacity="0.3"
-                    />
-                  )}
-                  {/* Main circle */}
-                  <circle
-                    cx={pos.cx} cy={pos.cy}
-                    r={12}
-                    fill={isDim ? 'rgba(30,42,60,0.9)' : `${color}22`}
-                    stroke={color}
-                    strokeWidth={isDim ? 1 : 2}
-                    opacity={isDim ? 0.5 : 1}
-                  />
-                  {/* Channel label */}
-                  <text
-                    x={pos.cx} y={pos.cy + 1}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill={isDim ? 'rgba(150,165,185,0.5)' : color}
-                    fontSize="7"
-                    fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                    fontWeight="700"
-                  >
-                    {pos.label}
-                  </text>
-                  {/* Impedance value or N/A below */}
-                  {result !== undefined && (
-                    <text
-                      x={pos.cx} y={pos.cy + 21}
-                      textAnchor="middle"
-                      fill="rgba(200,220,245,0.75)"
-                      fontSize="6"
-                      fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                    >
-                      {isNoSignal ? 'N/A' : `${kohm!.toFixed(0)}kΩ`}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-
-        {/* Right panel: channel list + legend */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-          {/* Channel cards grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-            gap: 10,
-          }}>
-            {ELECTRODE_POSITIONS.map((pos, idx) => {
-              const result = resultByIndex.get(idx);
-              const kohm = result?.impedanceKohm;
-              const isNoSignal = result !== undefined && (
-                (result.acAmplitude ?? 0) < NO_SIGNAL_AMPLITUDE_UV ||
-                result.impedanceKohm < LOW_IMPEDANCE_NA_KOHM
-              );
-              const quality: ImpedanceResult['quality'] | 'unknown' | 'noSignal' =
-                result === undefined ? 'unknown'
-                : isNoSignal ? 'noSignal'
-                : getQuality(kohm!);
-              const color = qualityColor(quality);
-              const isDim = quality === 'unknown' || quality === 'noSignal';
-
-              return (
-                <div
-                  key={pos.label}
-                  style={{
-                    background: 'rgba(8,17,30,0.8)',
-                    border: `1px solid ${!isDim ? color + '55' : 'rgba(60,75,95,0.4)'}`,
-                    borderRadius: 10,
-                    padding: '12px 14px',
-                    transition: 'border-color 0.3s',
-                  }}
+          return (
+            <g key={pos.label}>
+              {/* Glow ring */}
+              {!isDim && (
+                <circle cx={pos.cx} cy={pos.cy} r={14}
+                  fill="none" stroke={color} strokeWidth=".8" opacity=".3"
+                />
+              )}
+              {/* Main circle */}
+              <circle
+                cx={pos.cx} cy={pos.cy} r={10}
+                fill={isDim ? 'rgba(30,42,60,0.9)' : `${color}22`}
+                stroke={color}
+                strokeWidth={isDim ? 1 : 1.6}
+                opacity={isDim ? 0.5 : 1}
+              />
+              {/* Channel label */}
+              <text
+                x={pos.cx} y={pos.cy + 1}
+                textAnchor="middle" dominantBaseline="middle"
+                fill={isDim ? 'rgba(150,165,185,0.5)' : color}
+                fontSize="6"
+                fontFamily="IBM Plex Mono, monospace"
+                fontWeight="700"
+              >
+                {pos.label}
+              </text>
+              {/* Impedance value below node */}
+              {result !== undefined && (
+                <text
+                  x={pos.cx} y={pos.cy + 21}
+                  textAnchor="middle"
+                  fill="rgba(200,220,245,.6)"
+                  fontSize="5"
+                  fontFamily="IBM Plex Mono, monospace"
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                      fontSize: 14, fontWeight: 700,
-                      color: !isDim ? color : 'rgba(140,160,190,0.7)',
-                    }}>
-                      {pos.label}
-                    </span>
-                    <span style={{
-                      fontSize: 10, fontWeight: 600,
-                      color: color,
-                      background: `${color}18`,
-                      border: `1px solid ${color}44`,
-                      borderRadius: 4,
-                      padding: '2px 6px',
-                      opacity: isDim ? 0.5 : 1,
-                    }}>
-                      {qualityLabel(quality, lang)}
-                    </span>
-                  </div>
-                  <div style={{
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                    fontSize: 18, fontWeight: 700,
-                    color: !isDim ? color : 'rgba(100,115,135,0.5)',
-                  }}>
-                    {result === undefined
-                      ? '--'
-                      : isNoSignal
-                        ? 'N/A'
-                        : kohm!.toFixed(1)}
-                    <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 3 }}>
-                      {result !== undefined && !isNoSignal ? T(lang, 'kohm') : ''}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  {isNoSignal ? 'N/A' : `${kohm!.toFixed(0)}kΩ`}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
 
-          {/* Quality legend */}
-          <div style={{
-            background: 'rgba(8,17,30,0.7)',
-            border: '1px solid rgba(60,75,95,0.35)',
-            borderRadius: 10,
-            padding: '12px 16px',
-          }}>
-            <div style={{ fontSize: 12, color: 'rgba(140,160,185,0.7)', marginBottom: 8, fontWeight: 600 }}>
-              {T(lang, 'impedanceLegend')}
-            </div>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              {(
-                [
-                  { quality: 'excellent' as const, range: '< 150 kΩ' },
-                  { quality: 'good'      as const, range: '< 300 kΩ' },
-                  { quality: 'poor'      as const, range: '< 600 kΩ' },
-                  { quality: 'bad'       as const, range: '≥ 600 kΩ' },
-                ]
-              ).map(item => (
-                <div key={item.quality} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{
-                    width: 12, height: 12, borderRadius: '50%',
-                    background: qualityColor(item.quality),
-                  }} />
-                  <span style={{ fontSize: 12, color: qualityColor(item.quality) }}>
-                    {qualityLabel(item.quality, lang)}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'rgba(130,150,175,0.6)' }}>
-                    {item.range}
-                  </span>
-                </div>
-              ))}
-              {/* N/A legend entry */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{
-                  width: 12, height: 12, borderRadius: '50%',
-                  background: '#555e6a',
-                }} />
-                <span style={{ fontSize: 12, color: '#555e6a' }}>N/A</span>
-                <span style={{ fontSize: 11, color: 'rgba(130,150,175,0.6)' }}>
-                  無訊號
-                </span>
-              </div>
-            </div>
-            {/* N/A explanation note */}
-            <div style={{
-              marginTop: 10,
-              fontSize: 11,
-              color: 'rgba(130,150,175,0.65)',
-              padding: '5px 8px',
-              background: 'rgba(255,255,255,0.03)',
-              borderRadius: 5,
-            }}>
-              {T(lang, 'impedanceNoSignal')}
-            </div>
+      {/* ── Compact legend 2×2 ── */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gap: '.22rem', marginTop: '.32rem', flexShrink: 0,
+      }}>
+        {legendItems.map(item => (
+          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.6rem' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+            <span style={{ color: item.color }}>{item.label}</span>
+            <span style={{ color: 'var(--muted)', marginLeft: 'auto' }}>{item.range}</span>
           </div>
-
-          {/* Status info */}
-          {!isActive && isConnected && (
-            <div style={{
-              fontSize: 13,
-              color: 'rgba(140,160,190,0.6)',
-              padding: '8px 12px',
-              background: 'rgba(88,166,255,0.04)',
-              border: '1px solid rgba(88,166,255,0.15)',
-              borderRadius: 8,
-            }}>
-              {T(lang, 'impedanceNotMeasured')} — {T(lang, 'impedanceStart').toLowerCase()}
-            </div>
-          )}
-        </div>
+        ))}
       </div>
     </div>
   );

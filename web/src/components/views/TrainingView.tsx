@@ -591,34 +591,20 @@ const CardiacCard: FC<{
         })}
       </div>
 
-      {/* HR / Breathing */}
-      {isLive && (liveHr !== null || liveBreathing !== null) && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
-          {liveHr !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>HR</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveHr} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>bpm</span></div></div>}
-          {liveBreathing !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{T(lang, 'trainBreathing')}</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveBreathing} <span style={{ fontSize: 11 }}>/min</span></div></div>}
-        </div>
-      )}
-
-      {/* Secondary metrics row — always show both */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 6 }}>
-        <div>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>LF/HF</span>
-          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: state.metric === 'lfhf' ? '#f9a02e' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
-            {isLive ? state.lfHfRatio.toFixed(2) : '—'}
+      {/* All HRV metrics — compact single row, 5 cells */}
+      <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
+        {[
+          { label: 'HR', value: isLive && liveHr !== null ? `${liveHr} bpm` : '—', color: 'var(--rose)' },
+          { label: T(lang, 'trainBreathing'), value: isLive && liveBreathing !== null ? `${liveBreathing}/min` : '—', color: 'var(--teal)' },
+          { label: 'LF/HF', value: isLive ? state.lfHfRatio.toFixed(2) : '—', color: state.metric === 'lfhf' ? '#f9a02e' : 'var(--muted)' },
+          { label: 'RMSSD', value: isLive && state.rmssd > 0 ? `${state.rmssd.toFixed(1)}ms` : '—', color: 'rgba(200,215,235,.55)' },
+          { label: 'RMSSD-T', value: isLive && state.rmssdTscore > 0 ? state.rmssdTscore.toFixed(1) : '—', color: state.metric === 'rmssd-t' ? '#c084fc' : 'var(--muted)' },
+        ].map(item => (
+          <div key={item.label} style={{ flex: 1, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.22rem .3rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '.5rem', color: 'var(--text)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '.1rem' }}>{item.label}</div>
+            <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: '.7rem', color: item.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{item.value}</div>
           </div>
-        </div>
-        <div>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>RMSSD</span>
-          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 13, color: 'rgba(200,215,235,0.55)', fontWeight: 600 }}>
-            {isLive && state.rmssd > 0 ? `${state.rmssd.toFixed(1)} ms` : '—'}
-          </div>
-        </div>
-        <div>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>RMSSD-T</span>
-          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: state.metric === 'rmssd-t' ? '#c084fc' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
-            {isLive && state.rmssdTscore > 0 ? state.rmssdTscore.toFixed(1) : '—'}
-          </div>
-        </div>
+        ))}
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -1606,11 +1592,9 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const colStyle: React.CSSProperties = {
     flex: 1, minWidth: 0, minHeight: 0,
     display: 'flex', flexDirection: 'column', gap: 0,
-    overflowY: 'auto',
-    background: 'rgba(7,13,24,0.7)',
-    border: '1px solid rgba(93,109,134,0.18)',
-    borderRadius: 10,
-    padding: '8px',
+    overflowY: 'auto', overflowX: 'hidden',
+    background: 'var(--bg)',
+    padding: '.58rem .52rem',
   };
   const sectionHeaderStyle: React.CSSProperties = {
     fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase',
@@ -1630,7 +1614,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
   return (
     <LangContext.Provider value={lang ?? 'zh'}>
-    <div style={{ display: hidden ? 'none' : 'flex', gap: 16, height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: hidden ? 'none' : 'flex', gap: '1px', background: 'var(--border)', flex: 1, overflow: 'hidden', minHeight: 0 }}>
 
       {/* ── Column 1: EEG odd (#1 #3 #5) ── */}
       <div style={colStyle}>

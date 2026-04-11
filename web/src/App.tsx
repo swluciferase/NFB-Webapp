@@ -524,17 +524,28 @@ function App() {
             background: 'var(--border)',
             overflow: 'hidden',
           }}>
-            {/* Col A: Connect + Impedance */}
+            {/* Col A: Connect + Impedance (grows) + Instructions (pinned bottom) */}
             <div style={{
-              flex: '0 0 260px',
+              flex: '0 0 268px',
               background: 'var(--bg)',
-              overflowY: 'auto',
-              overflowX: 'hidden',
+              overflow: 'hidden',
               padding: '.6rem .55rem',
               display: 'flex',
               flexDirection: 'column',
               gap: 0,
+              minHeight: 0,
             }}>
+              {/* Section title */}
+              <div style={{
+                fontSize: '.6rem', letterSpacing: '.15em', textTransform: 'uppercase',
+                color: 'var(--cream)', marginBottom: '.44rem',
+                paddingBottom: '.24rem', borderBottom: '1px solid rgba(178,168,198,.1)',
+                display: 'flex', alignItems: 'center', gap: '.32rem', flexShrink: 0,
+              }}>
+                <span style={{ fontFamily: "'Crimson Pro','Georgia',serif", fontStyle: 'italic', fontSize: '.88rem', color: 'var(--plum)', lineHeight: 1 }}>⊙</span>
+                <span>{lang === 'zh' ? '裝置連接' : 'Device Connection'}</span>
+              </div>
+              {/* Connect card (no instructions) */}
               <HomeView
                 status={status}
                 stats={deviceStats}
@@ -542,15 +553,52 @@ function App() {
                 lang={lang}
                 onConnect={handleConnect}
                 onDisconnect={handleDisconnect}
+                hideInstructions={true}
               />
-              <ImpedanceView
-                impedanceResults={latestImpedance ?? undefined}
-                isConnected={isConnected}
-                isRecording={isRecording}
-                lang={lang}
-                onEnterImpedanceMode={handleEnterImpedance}
-                onExitImpedanceMode={handleExitImpedance}
-              />
+              {/* Impedance card — grows to fill remaining space */}
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: '.38rem' }}>
+                <ImpedanceView
+                  impedanceResults={latestImpedance ?? undefined}
+                  isConnected={isConnected}
+                  isRecording={isRecording}
+                  lang={lang}
+                  onEnterImpedanceMode={handleEnterImpedance}
+                  onExitImpedanceMode={handleExitImpedance}
+                />
+              </div>
+              {/* Instructions + notes — pinned to bottom */}
+              <div style={{ flexShrink: 0, marginTop: 'auto' }}>
+                <div style={{
+                  background: 'var(--bg2)', border: '1px solid var(--border)',
+                  borderRadius: 2, padding: '.6rem .65rem', marginBottom: '.3rem',
+                }}>
+                  <div style={{
+                    fontSize: '.6rem', letterSpacing: '.15em', textTransform: 'uppercase',
+                    color: 'var(--cream)', marginBottom: '.34rem',
+                    paddingBottom: '.22rem', borderBottom: '1px solid rgba(178,168,198,.1)',
+                    display: 'flex', alignItems: 'center', gap: '.32rem',
+                  }}>
+                    <span style={{ fontFamily: "'Crimson Pro','Georgia',serif", fontStyle: 'italic', fontSize: '.88rem', color: 'var(--plum)', lineHeight: 1 }}>→</span>
+                    <span>{T(lang, 'homeInstructions')}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '.38rem' }}>
+                    {[T(lang, 'homeStep1'), T(lang, 'homeStep2'), T(lang, 'homeStep3')].map((step, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '.52rem', alignItems: 'flex-start', fontSize: '.68rem', color: 'var(--text)', lineHeight: 1.52 }}>
+                        <div style={{
+                          width: 16, height: 16, borderRadius: '50%',
+                          border: '1px solid rgba(120,152,200,.35)', color: 'var(--teal)',
+                          fontSize: '.52rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0, marginTop: '.1rem',
+                        }}>{i + 1}</div>
+                        <span>{step.replace(/^\d+\.\s*/, '')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ fontSize: '.54rem', color: 'var(--muted)', lineHeight: 1.6, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.36rem .44rem' }}>
+                  {T(lang, 'homeRequiresSerial')}
+                </div>
+              </div>
             </div>
 
             {/* Col B + C: RecordView in split layout */}
@@ -610,7 +658,6 @@ function App() {
           display: activePage === 'training' ? 'flex' : 'none',
           flex: 1,
           overflow: 'hidden',
-          padding: '14px 16px',
         }}>
           <TrainingView
             packets={isConnected ? latestPackets : undefined}

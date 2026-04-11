@@ -11,39 +11,32 @@ export interface HomeViewProps {
   lang: Lang;
   onConnect: () => void;
   onDisconnect: () => void;
+  /** When true, instructions and notes are NOT rendered (App.tsx renders them at bottom of Col A) */
+  hideInstructions?: boolean;
 }
 
 const BatteryBar: FC<{ level: number | null }> = ({ level }) => {
-  if (level === null) return <span style={{ color: 'rgba(140,155,175,0.5)', fontSize: 13 }}>--</span>;
-
+  if (level === null) return <span style={{ color: 'var(--muted)', fontSize: '.6rem' }}>--</span>;
   const pct = Math.max(0, Math.min(100, level));
-  const color = pct > 50 ? '#3fb950' : pct > 20 ? '#e3b341' : '#f85149';
-
+  const color = pct > 50 ? 'var(--green)' : pct > 20 ? 'var(--amber)' : 'var(--red)';
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
       <div style={{
-        width: 44, height: 20, borderRadius: 3,
-        border: `2px solid ${color}`,
-        position: 'relative',
-        overflow: 'hidden',
-        background: 'rgba(0,0,0,0.3)',
+        width: 34, height: 14, borderRadius: 2,
+        border: `1.5px solid ${color}`,
+        position: 'relative', overflow: 'hidden',
+        background: 'rgba(0,0,0,.3)',
       }}>
-        {/* battery nib */}
         <div style={{
-          position: 'absolute',
-          right: -5, top: '50%', transform: 'translateY(-50%)',
-          width: 4, height: 10, background: color, borderRadius: '0 2px 2px 0',
+          position: 'absolute', right: -3, top: '50%', transform: 'translateY(-50%)',
+          width: 3, height: 6, background: color, borderRadius: '0 1px 1px 0',
         }} />
-        {/* fill */}
         <div style={{
-          position: 'absolute',
-          left: 0, top: 0, bottom: 0,
-          width: `${pct}%`,
-          background: color,
-          transition: 'width 0.5s ease',
+          position: 'absolute', left: 0, top: 0, bottom: 0,
+          width: `${pct}%`, background: color, transition: 'width .5s',
         }} />
       </div>
-      <span style={{ fontSize: 13, color, fontWeight: 600 }}>{pct}%</span>
+      <span style={{ fontSize: '.6rem', color }}>{pct}%</span>
     </div>
   );
 };
@@ -51,24 +44,24 @@ const BatteryBar: FC<{ level: number | null }> = ({ level }) => {
 const InfoRow: FC<{ label: string; value: ReactNode }> = ({ label, value }) => (
   <div style={{
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '10px 0',
-    borderBottom: '1px solid rgba(93,109,134,0.15)',
+    padding: '.28rem 0',
+    borderBottom: '1px solid rgba(178,168,198,.07)',
   }}>
-    <span style={{ color: 'rgba(140,160,185,0.8)', fontSize: 13 }}>{label}</span>
-    <span style={{ color: '#c5d8f0', fontSize: 13, fontWeight: 500 }}>{value}</span>
+    <span style={{ fontSize: '.68rem', color: 'var(--text)' }}>{label}</span>
+    <span style={{ fontSize: '.66rem', color: 'var(--cream)' }}>{value}</span>
   </div>
 );
 
 export const HomeView: FC<HomeViewProps> = ({
-  status, stats, deviceId, lang, onConnect, onDisconnect,
+  status, stats, deviceId, lang, onConnect, onDisconnect, hideInstructions,
 }) => {
   const isConnected = status === 'connected';
   const isConnecting = status === 'connecting';
 
   const statusColor =
-    isConnected   ? '#3fb950' :
-    isConnecting  ? '#58a6ff' :
-    status === 'error' ? '#f85149' : '#555e6a';
+    isConnected   ? 'var(--green)' :
+    isConnecting  ? 'var(--teal)'  :
+    status === 'error' ? 'var(--red)' : 'var(--dim)';
 
   const statusLabel = (() => {
     switch (status) {
@@ -79,61 +72,38 @@ export const HomeView: FC<HomeViewProps> = ({
     }
   })();
 
+  const btnBase: React.CSSProperties = {
+    padding: '.2rem .6rem', border: '1px solid', borderRadius: 1,
+    background: 'transparent', fontFamily: 'inherit',
+    fontSize: '.64rem', cursor: 'pointer', letterSpacing: '.04em',
+    transition: 'all .15s', flexShrink: 0,
+  };
+
   return (
-    <div style={{ padding: '8px 0' }}>
-
-      {/* Status card */}
+    <div style={{ flexShrink: 0 }}>
+      {/* ── Connect status card ── */}
       <div style={{
-        background: 'linear-gradient(135deg, rgba(13,21,34,0.95), rgba(10,18,30,0.95))',
-        border: `1px solid ${isConnected ? 'rgba(63,185,80,0.35)' : 'rgba(93,109,134,0.3)'}`,
-        borderRadius: 14,
-        padding: '24px 28px',
-        marginBottom: 20,
-        position: 'relative',
-        overflow: 'hidden',
+        background: 'var(--bg2)',
+        border: `1px solid ${isConnected ? 'rgba(106,170,128,.3)' : 'var(--border)'}`,
+        borderRadius: 2,
+        padding: '.6rem .65rem',
+        marginBottom: '.38rem',
+        flexShrink: 0,
+        transition: 'border-color .3s',
       }}>
-        {/* Background glow */}
-        <div style={{
-          position: 'absolute',
-          top: -30, left: -30,
-          width: 160, height: 160,
-          borderRadius: '50%',
-          background: isConnected
-            ? 'radial-gradient(circle, rgba(63,185,80,0.08), transparent 70%)'
-            : 'radial-gradient(circle, rgba(88,166,255,0.06), transparent 70%)',
-          pointerEvents: 'none',
-        }} />
-
         {/* Status row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isConnected ? '.42rem' : 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
             <div style={{
-              width: 14, height: 14, borderRadius: '50%',
+              width: 8, height: 8, borderRadius: '50%',
               background: statusColor,
-              boxShadow: isConnected ? `0 0 10px ${statusColor}` : 'none',
-              animation: isConnecting ? 'pulse 1.5s infinite' : 'none',
+              boxShadow: isConnected ? '0 0 6px var(--green)' : 'none',
+              flexShrink: 0,
             }} />
-            <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#dce9f8' }}>
-              {statusLabel}
-            </span>
+            <span style={{ fontSize: '.74rem', color: 'var(--cream)' }}>{statusLabel}</span>
           </div>
-
-          {/* Connect / Disconnect button */}
           {isConnected ? (
-            <button
-              onClick={onDisconnect}
-              style={{
-                background: 'rgba(248, 81, 73, 0.15)',
-                border: '1px solid rgba(248, 81, 73, 0.5)',
-                borderRadius: 8,
-                color: '#f85149',
-                fontSize: 13,
-                fontWeight: 600,
-                padding: '8px 18px',
-                cursor: 'pointer',
-                transition: 'background 0.15s',
-              }}
-            >
+            <button onClick={onDisconnect} style={{ ...btnBase, borderColor: 'rgba(176,112,112,.4)', color: 'var(--red)' }}>
               {T(lang, 'homeDisconnect')}
             </button>
           ) : (
@@ -141,17 +111,10 @@ export const HomeView: FC<HomeViewProps> = ({
               onClick={onConnect}
               disabled={isConnecting}
               style={{
-                background: isConnecting
-                  ? 'rgba(88,166,255,0.12)'
-                  : 'rgba(63,185,80,0.18)',
-                border: `1px solid ${isConnecting ? 'rgba(88,166,255,0.45)' : 'rgba(63,185,80,0.5)'}`,
-                borderRadius: 8,
-                color: isConnecting ? '#58a6ff' : '#3fb950',
-                fontSize: 13,
-                fontWeight: 600,
-                padding: '8px 18px',
+                ...btnBase,
+                borderColor: isConnecting ? 'rgba(120,152,168,.4)' : 'rgba(106,170,128,.5)',
+                color: isConnecting ? 'var(--teal)' : 'var(--green)',
                 cursor: isConnecting ? 'not-allowed' : 'pointer',
-                transition: 'background 0.15s',
               }}
             >
               {isConnecting ? T(lang, 'connecting') : T(lang, 'homeConnect')}
@@ -160,122 +123,65 @@ export const HomeView: FC<HomeViewProps> = ({
         </div>
 
         {/* Device info when connected */}
-        {isConnected ? (
-          <div>
-            <InfoRow
-              label={T(lang, 'homeDeviceId')}
-              value={
-                <span style={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  fontSize: 12, color: '#7ec8f5',
-                }}>
-                  {deviceId ?? T(lang, 'unknown')}
-                </span>
-              }
-            />
-            <InfoRow
-              label={T(lang, 'homeSampleRate')}
-              value={<span>1000 {T(lang, 'hz')}</span>}
-            />
-            <InfoRow
-              label={T(lang, 'homePacketRate')}
-              value={
-                <span style={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                }}>
-                  {stats.packetRate} pkt/s
-                </span>
-              }
-            />
-            <div style={{ padding: '10px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'rgba(140,160,185,0.8)', fontSize: 13 }}>
-                  {T(lang, 'homeBattery')}
-                </span>
-                <BatteryBar level={stats.battery} />
-              </div>
-            </div>
+        {isConnected && (<>
+          <InfoRow
+            label={T(lang, 'homeDeviceId')}
+            value={<span style={{ color: 'var(--teal)', fontSize: '.56rem', fontVariantNumeric: 'tabular-nums' }}>{deviceId ?? T(lang, 'unknown')}</span>}
+          />
+          <InfoRow label={T(lang, 'homeSampleRate')} value={`1000 ${T(lang, 'hz')}`} />
+          <InfoRow label={T(lang, 'homePacketRate')} value={`${stats.packetRate} pkt/s`} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '.28rem 0' }}>
+            <span style={{ fontSize: '.68rem', color: 'var(--text)' }}>{T(lang, 'homeBattery')}</span>
+            <BatteryBar level={stats.battery} />
           </div>
-        ) : (
-          <div style={{ color: 'rgba(140,160,190,0.65)', fontSize: 14, lineHeight: 1.6 }}>
-            <div style={{ fontWeight: 600, color: 'rgba(180,200,230,0.8)', marginBottom: 6 }}>
-              {T(lang, 'homeNotConnectedTitle')}
-            </div>
-            <div>{T(lang, 'homeNotConnectedHint')}</div>
+        </>)}
+
+        {/* Not connected hint */}
+        {!isConnected && (
+          <div style={{ marginTop: '.32rem', fontSize: '.64rem', color: 'var(--muted)', lineHeight: 1.6 }}>
+            {T(lang, 'homeNotConnectedHint')}
           </div>
         )}
       </div>
 
-      {/* Instructions card */}
-      <div style={{
-        background: 'rgba(10, 18, 30, 0.7)',
-        border: '1px solid rgba(93,109,134,0.25)',
-        borderRadius: 14,
-        padding: '20px 24px',
-        marginBottom: 20,
-      }}>
-        <h3 style={{
-          margin: '0 0 14px',
-          fontSize: '0.95rem',
-          fontWeight: 600,
-          color: 'rgba(180,200,230,0.85)',
-          letterSpacing: '0.03em',
+      {/* ── Instructions + notes (skipped when hideInstructions=true) ── */}
+      {!hideInstructions && (<>
+        {/* Instructions card */}
+        <div style={{
+          background: 'var(--bg2)', border: '1px solid var(--border)',
+          borderRadius: 2, padding: '.6rem .65rem', marginBottom: '.3rem',
         }}>
-          {T(lang, 'homeInstructions')}
-        </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[
-            T(lang, 'homeStep1'),
-            T(lang, 'homeStep2'),
-            T(lang, 'homeStep3'),
-          ].map((step, i) => (
-            <div key={i} style={{
-              display: 'flex', gap: 10, alignItems: 'flex-start',
-              color: 'rgba(160,180,210,0.75)', fontSize: 13, lineHeight: 1.55,
-            }}>
-              <span style={{
-                background: 'rgba(30,65,115,0.7)',
-                border: '1px solid rgba(88,166,255,0.3)',
-                borderRadius: '50%',
-                width: 22, height: 22,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 700, color: '#58a6ff',
-                flexShrink: 0, marginTop: 1,
-              }}>{i + 1}</span>
-              <span>{step.replace(/^\d+\.\s*/, '')}</span>
-            </div>
-          ))}
+          <div style={{
+            fontSize: '.6rem', letterSpacing: '.15em', textTransform: 'uppercase',
+            color: 'var(--cream)', marginBottom: '.34rem',
+            paddingBottom: '.22rem', borderBottom: '1px solid rgba(178,168,198,.1)',
+            display: 'flex', alignItems: 'center', gap: '.32rem',
+          }}>
+            <span style={{ fontFamily: "'Crimson Pro','Georgia',serif", fontStyle: 'italic', fontSize: '.88rem', color: 'var(--plum)', lineHeight: 1 }}>→</span>
+            <span>{T(lang, 'homeInstructions')}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '.38rem' }}>
+            {[T(lang, 'homeStep1'), T(lang, 'homeStep2'), T(lang, 'homeStep3')].map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: '.52rem', alignItems: 'flex-start', fontSize: '.68rem', color: 'var(--text)', lineHeight: 1.52 }}>
+                <div style={{
+                  width: 16, height: 16, borderRadius: '50%',
+                  border: '1px solid rgba(120,152,200,.35)', color: 'var(--teal)',
+                  fontSize: '.52rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, marginTop: '.1rem',
+                }}>{i + 1}</div>
+                <span>{step.replace(/^\d+\.\s*/, '')}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-
-      {/* Browser requirement note */}
-      <div style={{
-        padding: '10px 16px',
-        background: 'rgba(88,166,255,0.06)',
-        border: '1px solid rgba(88,166,255,0.2)',
-        borderRadius: 8,
-        color: 'rgba(135,175,220,0.7)',
-        fontSize: 12,
-        display: 'flex', alignItems: 'center', gap: 8,
-        marginBottom: 10,
-      }}>
-        <span style={{ fontSize: 15 }}>ℹ</span>
-        {T(lang, 'homeRequiresSerial')}
-      </div>
-
-      {/* Multi-device note */}
-      <div style={{
-        padding: '10px 16px',
-        background: 'rgba(63,185,80,0.04)',
-        border: '1px solid rgba(63,185,80,0.15)',
-        borderRadius: 8,
-        color: 'rgba(120,190,150,0.7)',
-        fontSize: 12,
-        display: 'flex', alignItems: 'center', gap: 8,
-      }}>
-        <span style={{ fontSize: 15 }}>⊕</span>
-        {T(lang, 'homeMultiDevice')}
-      </div>
+        {/* Notes */}
+        <div style={{ fontSize: '.54rem', color: 'var(--muted)', lineHeight: 1.6, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.36rem .44rem', marginBottom: '.3rem' }}>
+          {T(lang, 'homeRequiresSerial')}
+        </div>
+        <div style={{ fontSize: '.54rem', color: 'var(--muted)', lineHeight: 1.6, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.36rem .44rem' }}>
+          {T(lang, 'homeMultiDevice')}
+        </div>
+      </>)}
     </div>
   );
 };

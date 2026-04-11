@@ -259,8 +259,23 @@ export const WaveformView = ({
   const filterCoeffsRef = useRef(filterCoeffs);
   useEffect(() => { filterCoeffsRef.current = filterCoeffs; }, [filterCoeffs]);
 
-  // Keep refs in sync with state/props
-  useEffect(() => { fullScaleUvRef.current = fullScaleUv; }, [fullScaleUv]);
+  // Keep refs in sync with state/props.
+  // When scale changes, reset all WebGL line y values to new baseline so old
+  // clip-space data (calculated with the previous scale) is immediately cleared.
+  useEffect(() => {
+    fullScaleUvRef.current = fullScaleUv;
+    const lines = linesRef.current;
+    if (!lines.length) return;
+    const windowPoints = lines[0] ? lines[0].xy.length / 2 : 0;
+    for (let ch = 0; ch < CHANNEL_COUNT; ch++) {
+      const line = lines[ch];
+      if (!line) continue;
+      const baseline = toClipY(0, ch, fullScaleUv);
+      for (let i = 0; i < windowPoints; i++) {
+        line.xy[i * 2 + 1] = baseline;
+      }
+    }
+  }, [fullScaleUv]);
   useEffect(() => { visibleChannelsRef.current = visibleChannels; }, [visibleChannels]);
   useEffect(() => { filterParamsRef.current = filterParams; }, [filterParams]);
 

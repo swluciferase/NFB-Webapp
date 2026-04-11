@@ -1206,7 +1206,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
       visioMyndWindowRef.current.focus();
       return;
     }
-    visioMyndWindowRef.current = window.open('https://www.sigmacog.xyz/visiomynd', 'visiomynd_window', 'width=1280,height=800,resizable=yes');
+    visioMyndWindowRef.current = window.open(window.location.origin + '/visiomynd', 'visiomynd_window', 'width=1280,height=800,resizable=yes');
   }, []);
 
   // Session

@@ -68,9 +68,9 @@ function computeButterLP(f0: number, fs: number, q: number) {
   };
 }
 
-// Dual notch at 50 Hz + 60 Hz with Q=6
-const NOTCH_Q = 6;
-function computeDualNotch(fs: number) {
+// Comb notch: 50 Hz + 60 Hz (fundamental) + 120 Hz (2nd harmonic), Q=30 each
+const NOTCH_Q = 30;
+function computeCombNotch(fs: number) {
   const makeCoeff = (f0: number) => {
     const w0    = 2 * Math.PI * f0 / fs;
     const alpha = Math.sin(w0) / (2 * NOTCH_Q);
@@ -78,7 +78,7 @@ function computeDualNotch(fs: number) {
     const a0    = 1 + alpha;
     return { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
   };
-  return { c50: makeCoeff(50), c60: makeCoeff(60) };
+  return { c50: makeCoeff(50), c60: makeCoeff(60), c120: makeCoeff(120) };
 }
 
 function applyBiquad(
@@ -100,7 +100,7 @@ function applyFilterChain(
   params: FilterParams,
   hpCoeffs: ReturnType<typeof computeButterHP>[],
   lpCoeffs: ReturnType<typeof computeButterLP>[],
-  notchCoeffs: ReturnType<typeof computeDualNotch>,
+  notchCoeffs: ReturnType<typeof computeCombNotch>,
 ): number {
   let s = x;
   const dcAlpha = 0.9985;
@@ -118,9 +118,11 @@ function applyFilterChain(
   }
 
   if (params.notchFreq !== 0) {
-    const { c50, c60 } = notchCoeffs;
-    s = applyBiquad(s, biquad.notchState, ch * 6,     c50.b0, c50.b1, c50.b2, c50.a1, c50.a2);
-    s = applyBiquad(s, biquad.notchState, ch * 6 + 2, c60.b0, c60.b1, c60.b2, c60.a1, c60.a2);
+    // Comb notch: 50 Hz (ch*6+0/1) + 60 Hz (ch*6+2/3) + 120 Hz (ch*6+4/5)
+    const { c50, c60, c120 } = notchCoeffs;
+    s = applyBiquad(s, biquad.notchState, ch * 6,     c50.b0,  c50.b1,  c50.b2,  c50.a1,  c50.a2);
+    s = applyBiquad(s, biquad.notchState, ch * 6 + 2, c60.b0,  c60.b1,  c60.b2,  c60.a1,  c60.a2);
+    s = applyBiquad(s, biquad.notchState, ch * 6 + 4, c120.b0, c120.b1, c120.b2, c120.a1, c120.a2);
   }
 
   return s;
@@ -304,7 +306,7 @@ export const FftView = ({
       compute1stOrderLP(filterParams.lpFreq, SAMPLE_RATE_HZ),
       computeButterLP(filterParams.lpFreq, SAMPLE_RATE_HZ, 1.0),
     ],
-    notch: computeDualNotch(SAMPLE_RATE_HZ),
+    notch: computeCombNotch(SAMPLE_RATE_HZ),
   }), [filterParams.hpFreq, filterParams.lpFreq]);
 
   const filterCoeffsRef = useRef(filterCoeffs);

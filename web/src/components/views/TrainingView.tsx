@@ -291,7 +291,10 @@ const EegCard: FC<{
   const lang = useLang();
   const aboveThreshold = indicator.value >= indicator.threshold;
   const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
-  const activePreset = PRESET_OPTIONS.find(p => p.value === indicator.presetKey) ?? null;
+  // Only consider a preset "active" when a non-empty key is selected
+  const activePreset = indicator.presetKey
+    ? (PRESET_OPTIONS.find(p => p.value === indicator.presetKey) ?? null)
+    : null;
   const selectStyle: React.CSSProperties = {
     background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5,
     color: 'var(--text-primary)', fontSize: 12, padding: '3px 6px', cursor: 'pointer', flex: 1,

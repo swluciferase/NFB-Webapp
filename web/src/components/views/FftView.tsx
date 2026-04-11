@@ -271,8 +271,12 @@ export const FftView = ({
   const [maxFreq, setMaxFreq] = useState<MaxFreq>(60);
   const maxFreqRef = useRef<MaxFreq>(60);
 
-  const [dbRangeIdx, setDbRangeIdx] = useState(1); // 0=Narrow, 1=Normal, 2=Wide
-  const dbRangeIdxRef = useRef(1);
+  const [minDb, setMinDb] = useState(-60);
+  const [maxDb, setMaxDb] = useState(40);
+  const minDbRef = useRef(-60);
+  const maxDbRef = useRef(40);
+  const [minDbInput, setMinDbInput] = useState('-60');
+  const [maxDbInput, setMaxDbInput] = useState('40');
 
   const filterParamsRef = useRef(filterParams);
   useEffect(() => { filterParamsRef.current = filterParams; }, [filterParams]);
@@ -314,7 +318,7 @@ export const FftView = ({
       const biquad = filterBiquadRef.current;
       const { hp, lp, notch } = filterCoeffsRef.current;
       const windowFn = windowFnRef.current;
-      const dbRange = DB_RANGE_OPTIONS[dbRangeIdxRef.current] ?? DB_RANGE_OPTIONS[1]!;
+      const dbRange = { minDb: minDbRef.current, maxDb: maxDbRef.current };
 
       for (const packet of queue) {
         const channels = packet.eegChannels;
@@ -407,18 +411,33 @@ export const FftView = ({
         flexWrap: 'wrap',
         gap: 8,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Y-axis dB range */}
-          <span style={{ fontSize: 12, color: 'rgba(152,136,168,0.7)' }}>Y:</span>
-          {DB_RANGE_OPTIONS.map((opt, idx) => (
-            <button
-              key={idx}
-              onClick={() => { dbRangeIdxRef.current = idx; setDbRangeIdx(idx); }}
-              style={btnStyle(dbRangeIdx === idx)}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Y-axis dB range — manual inputs */}
+          <span style={{ fontSize: 12, color: 'rgba(152,136,168,0.7)' }}>Y (dB):</span>
+          <input
+            type="number"
+            value={minDbInput}
+            onChange={e => setMinDbInput(e.target.value)}
+            onBlur={() => {
+              const v = parseInt(minDbInput);
+              if (!isNaN(v) && v < maxDb) { minDbRef.current = v; setMinDb(v); }
+              else setMinDbInput(String(minDb));
+            }}
+            style={{ width: 52, background: 'rgba(22,18,28,0.9)', border: '1px solid rgba(94,88,112,0.5)', borderRadius: 4, color: '#ccc4d4', fontSize: 11, padding: '3px 5px', outline: 'none', textAlign: 'right', fontFamily: 'ui-monospace,monospace' }}
+          />
+          <span style={{ fontSize: 11, color: 'rgba(152,136,168,0.5)' }}>~</span>
+          <input
+            type="number"
+            value={maxDbInput}
+            onChange={e => setMaxDbInput(e.target.value)}
+            onBlur={() => {
+              const v = parseInt(maxDbInput);
+              if (!isNaN(v) && v > minDb) { maxDbRef.current = v; setMaxDb(v); }
+              else setMaxDbInput(String(maxDb));
+            }}
+            style={{ width: 52, background: 'rgba(22,18,28,0.9)', border: '1px solid rgba(94,88,112,0.5)', borderRadius: 4, color: '#ccc4d4', fontSize: 11, padding: '3px 5px', outline: 'none', textAlign: 'right', fontFamily: 'ui-monospace,monospace' }}
+          />
+          <span style={{ fontSize: 11, color: 'rgba(152,136,168,0.5)' }}>dB</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

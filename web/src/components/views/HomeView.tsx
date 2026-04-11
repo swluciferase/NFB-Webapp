@@ -73,10 +73,10 @@ export const HomeView: FC<HomeViewProps> = ({
   })();
 
   const btnBase: React.CSSProperties = {
-    padding: '.2rem .6rem', border: '1px solid', borderRadius: 1,
+    padding: '.32rem .9rem', border: '1px solid', borderRadius: 1,
     background: 'transparent', fontFamily: 'inherit',
-    fontSize: '.64rem', cursor: 'pointer', letterSpacing: '.04em',
-    transition: 'all .15s', flexShrink: 0,
+    fontSize: '.76rem', cursor: 'pointer', letterSpacing: '.06em',
+    transition: 'all .15s', flexShrink: 0, fontWeight: 600,
   };
 
   return (

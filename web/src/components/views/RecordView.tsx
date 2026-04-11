@@ -671,12 +671,13 @@ export const RecordView: FC<RecordViewProps> = ({
               disabled={!isConnected}
               style={{
                 gridColumn: '1 / -1',
-                padding: '.56rem 0', border: 'none', borderRadius: 1,
-                background: isConnected ? 'rgba(152,136,168,.12)' : 'rgba(60,80,100,.2)',
-                color: isConnected ? 'var(--mauve)' : 'var(--muted)',
-                border: `1px solid ${isConnected ? 'rgba(152,136,168,.4)' : 'var(--border)'}`,
-                fontFamily: 'inherit', fontSize: '.72rem', letterSpacing: '.12em',
+                padding: '.7rem 0', border: 'none', borderRadius: 1,
+                background: isConnected ? 'rgba(152,136,168,.15)' : 'rgba(60,80,100,.2)',
+                color: isConnected ? 'var(--cream)' : 'var(--muted)',
+                border: `1px solid ${isConnected ? 'rgba(152,136,168,.55)' : 'var(--border)'}`,
+                fontFamily: 'inherit', fontSize: '.86rem', letterSpacing: '.14em',
                 textTransform: 'uppercase', cursor: isConnected ? 'pointer' : 'not-allowed',
+                fontWeight: 700,
               } as CSSProperties}>
               {T(lang, 'recordStart')}
             </button>

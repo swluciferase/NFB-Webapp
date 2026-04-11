@@ -771,8 +771,8 @@ export const RecordView: FC<RecordViewProps> = ({
   if (layout === 'split') {
     return (
       <>
-        {/* Col B: settings (flex:2) */}
-        <div style={{ ...colStyle, flex: 2 }}>
+        {/* Col B: settings (flex:1) */}
+        <div style={{ ...colStyle, flex: 1 }}>
           {settingsSection}
         </div>
         {/* Col C: controls (flex:1) */}

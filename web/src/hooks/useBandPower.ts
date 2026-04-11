@@ -90,8 +90,12 @@ function applyFilterChain(
   notch: ReturnType<typeof computeNotchStages>,
 ): number {
   let s = x;
-  const dcAlpha = 0.9985;
+  const DC_ALPHA_SLOW = 0.9985;
+  const DC_ALPHA_FAST = 0.99;
+  const LARGE_DRIFT_THRESH = 150;
   const dcPrev = biquad.dcState[ch] ?? 0;
+  const drift = Math.abs(s - dcPrev);
+  const dcAlpha = drift > LARGE_DRIFT_THRESH ? DC_ALPHA_FAST : DC_ALPHA_SLOW;
   const dcOut = s - dcPrev;
   biquad.dcState[ch] = dcAlpha * dcPrev + (1 - dcAlpha) * s;
   s = dcOut;

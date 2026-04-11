@@ -156,8 +156,14 @@ function applyFilterChain(
   let s = x;
 
   // DC removal (always on): single-pole IIR, α=0.9985
-  const dcAlpha = 0.9985;
+  // Dual-rate DC blocker: fast α on large drift (electrode movement / artifact),
+  // slow α otherwise to preserve sub-Hz EEG components
+  const DC_ALPHA_SLOW = 0.9985; // τ ≈ 665 ms — normal operation
+  const DC_ALPHA_FAST = 0.99;   // τ ≈ 100 ms — fast drift / step recovery
+  const LARGE_DRIFT_THRESH = 150; // µV — above this switches to fast tracking
   const dcPrev = biquad.dcState[ch];
+  const drift = Math.abs(s - dcPrev);
+  const dcAlpha = drift > LARGE_DRIFT_THRESH ? DC_ALPHA_FAST : DC_ALPHA_SLOW;
   const dcOut = s - dcPrev;
   biquad.dcState[ch] = dcAlpha * dcPrev + (1 - dcAlpha) * s;
   s = dcOut;

@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import './App.css';
 import { Header } from './components/layout/Header';
-import { Sidebar } from './components/layout/Sidebar';
+import type { PageType } from './components/layout/Header';
+// TabType kept for internal guard logic only
 import type { TabType } from './components/layout/Sidebar';
 import { HomeView } from './components/views/HomeView';
 import { ImpedanceView } from './components/views/ImpedanceView';
@@ -73,6 +74,7 @@ function computeNotchDesc(fp: FilterParams): string {
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [activePage, setActivePage] = useState<PageType>('ci');
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [lang, setLang] = useState<Lang>('zh');
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -461,36 +463,112 @@ function App() {
 
   const isConnected = status === 'connected';
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return (
-          <HomeView
-            status={status}
-            stats={deviceStats}
-            deviceId={deviceId}
-            lang={lang}
-            onConnect={handleConnect}
-            onDisconnect={handleDisconnect}
-          />
-        );
+  // Page switching guards
+  const handlePageChange = (page: PageType) => {
+    if (page === 'signal' && !isConnected) return;
+    if (page === 'signal' && isImpedanceActive) return;
+    setActivePage(page);
+    // Keep activeTab in sync for any internal logic that still references it
+    if (page === 'signal')   setActiveTab('signal');
+    if (page === 'training') setActiveTab('training');
+    if (page === 'ci')       setActiveTab('home');
+  };
 
-      case 'impedance':
-        return (
-          <ImpedanceView
-            impedanceResults={latestImpedance ?? undefined}
-            isConnected={isConnected}
-            isRecording={isRecording}
-            lang={lang}
-            onEnterImpedanceMode={handleEnterImpedance}
-            onExitImpedanceMode={handleExitImpedance}
-          />
-        );
+  // Tab switching guards (kept for backward compat / internal callers)
+  const handleTabChange = (tab: TabType) => {
+    const restricted = ['impedance', 'signal', 'fft', 'record'] as TabType[];
+    if (restricted.includes(tab) && !isConnected) return;
+    if (tab === 'impedance' && isRecording) return;
+    if (tab === 'signal' && isImpedanceActive) return;
+    setActiveTab(tab);
+  };
+  void handleTabChange; // suppress unused-var lint
 
-      case 'signal':
-      case 'fft':
-        return (
-          <div style={{ display: 'flex', height: '100%', gap: 8, overflow: 'hidden' }}>
+  // ── Shared column style for CI 3-column page ──
+  const ciColStyle: CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+    overflowY: 'auto',
+    overflowX: 'hidden',
+  };
+
+  return (
+    <div className="app-container">
+      <Header
+        lang={lang}
+        onLangToggle={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
+        activePage={activePage}
+        onPageChange={handlePageChange}
+        isConnected={isConnected}
+        isRecording={isRecording}
+        deviceId={deviceId}
+        packetRate={deviceStats.packetRate}
+      />
+      <div className="main-layout">
+        {/* ── CI page: 3-column layout ── */}
+        {activePage === 'ci' && (
+          <div style={{
+            display: 'flex',
+            flex: 1,
+            gap: 10,
+            padding: '10px 12px',
+            overflow: 'hidden',
+          }}>
+            {/* Col A: Connect status */}
+            <div style={{ ...ciColStyle, flex: '0 0 260px' }}>
+              <HomeView
+                status={status}
+                stats={deviceStats}
+                deviceId={deviceId}
+                lang={lang}
+                onConnect={handleConnect}
+                onDisconnect={handleDisconnect}
+              />
+            </div>
+
+            {/* Col B: Impedance */}
+            <div style={{ ...ciColStyle, flex: '1 1 0' }}>
+              <ImpedanceView
+                impedanceResults={latestImpedance ?? undefined}
+                isConnected={isConnected}
+                isRecording={isRecording}
+                lang={lang}
+                onEnterImpedanceMode={handleEnterImpedance}
+                onExitImpedanceMode={handleExitImpedance}
+              />
+            </div>
+
+            {/* Col C: Record */}
+            <div style={{ ...ciColStyle, flex: '1 1 0' }}>
+              <RecordView
+                lang={lang}
+                isConnected={isConnected}
+                isRecording={isRecording}
+                subjectInfo={subjectInfo}
+                onSubjectInfoChange={setSubjectInfo}
+                onStartRecording={handleStartRecording}
+                onStopRecording={handleStopRecording}
+                recordedSamples={recordedSamples}
+                deviceId={deviceId}
+                filterDesc={computeFilterDesc(filterParams)}
+                notchDesc={computeNotchDesc(filterParams)}
+                startTime={recordStartTime}
+                onEventMarker={handleEventMarker}
+                eventMarkers={eventMarkers}
+                qualityConfig={qualityConfig}
+                onQualityConfigChange={setQualityConfig}
+                currentWindowStds={currentWindowStds}
+                goodTimeSec={goodTimeSec}
+                goodPercent={goodPercent}
+                shouldAutoStop={shouldAutoStop}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Signal+FFT page ── */}
+        {activePage === 'signal' && (
+          <div style={{ display: 'flex', flex: 1, gap: 8, overflow: 'hidden', padding: '10px 12px' }}>
             <div style={{ flex: 2, minWidth: 0, overflow: 'hidden' }}>
               <WaveformView
                 packets={latestPackets}
@@ -511,96 +589,35 @@ function App() {
               />
             </div>
           </div>
-        );
+        )}
 
-      case 'record':
-        return (
-          <RecordView
-            lang={lang}
-            isConnected={isConnected}
-            isRecording={isRecording}
-            subjectInfo={subjectInfo}
-            onSubjectInfoChange={setSubjectInfo}
-            onStartRecording={handleStartRecording}
-            onStopRecording={handleStopRecording}
-            recordedSamples={recordedSamples}
-            deviceId={deviceId}
-            filterDesc={computeFilterDesc(filterParams)}
-            notchDesc={computeNotchDesc(filterParams)}
-            startTime={recordStartTime}
-            onEventMarker={handleEventMarker}
-            eventMarkers={eventMarkers}
-            qualityConfig={qualityConfig}
-            onQualityConfigChange={setQualityConfig}
-            currentWindowStds={currentWindowStds}
-            goodTimeSec={goodTimeSec}
-            goodPercent={goodPercent}
-            shouldAutoStop={shouldAutoStop}
-          />
-        );
-
-      case 'training':
-        return null; // rendered always-mounted below
-
-      default:
-        return null;
-    }
-  };
-
-  // Tab switching guards
-  const handleTabChange = (tab: TabType) => {
-    // All non-home tabs require connection
-    const restricted = ['impedance', 'signal', 'fft', 'record'] as TabType[];
-    if (restricted.includes(tab) && !isConnected) return;
-    // Impedance blocked during recording
-    if (tab === 'impedance' && isRecording) return;
-    // Signal blocked while impedance measurement is active
-    if (tab === 'signal' && isImpedanceActive) return;
-    setActiveTab(tab);
-  };
-
-  return (
-    <div className="app-container">
-      <Header
-        lang={lang}
-        onLangToggle={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
-      />
-      <div className="main-layout">
-        <Sidebar
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          lang={lang}
-          isConnected={isConnected}
-          isImpedanceActive={isImpedanceActive}
-          isRecording={isRecording}
-          packetRate={deviceStats.packetRate}
-          deviceId={deviceId}
-        />
-        <main
-          className="content-area"
-          style={activeTab === 'training' ? { overflow: 'hidden', padding: '14px 16px' } : undefined}
-        >
-          {/* TrainingView always mounted — keeps background processing and postMessage listener alive */}
+        {/* ── Training page ── */}
+        {/* TrainingView always mounted — keeps background processing and postMessage listener alive */}
+        <div style={{
+          display: activePage === 'training' ? 'flex' : 'none',
+          flex: 1,
+          overflow: 'hidden',
+          padding: '14px 16px',
+        }}>
           <TrainingView
             packets={isConnected ? latestPackets : undefined}
             filterParams={filterParams}
-            hidden={activeTab !== 'training'}
+            hidden={activePage !== 'training'}
             lang={lang}
           />
-          {activeTab !== 'training' && renderContent()}
-        </main>
+        </div>
       </div>
 
-      {/* Recording indicator overlay badge (visible from any tab) */}
-      {isRecording && activeTab !== 'signal' && activeTab !== 'record' && (
+      {/* Recording indicator overlay badge (visible from signal/training pages) */}
+      {isRecording && activePage !== 'ci' && (
         <div style={{
           position: 'fixed',
           bottom: 16,
           right: 16,
-          background: 'rgba(248,81,73,0.18)',
-          border: '1px solid rgba(248,81,73,0.5)',
-          borderRadius: 10,
-          padding: '8px 16px',
+          background: 'rgba(176,112,112,0.15)',
+          border: '1px solid rgba(176,112,112,0.4)',
+          borderRadius: 8,
+          padding: '7px 14px',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
@@ -608,11 +625,11 @@ function App() {
           backdropFilter: 'blur(8px)',
         }}>
           <div style={{
-            width: 9, height: 9, borderRadius: '50%',
-            background: '#f85149',
+            width: 7, height: 7, borderRadius: '50%',
+            background: 'var(--rose)',
             animation: 'pulse 1s infinite',
           }} />
-          <span style={{ fontSize: 13, color: '#f85149', fontWeight: 600 }}>
+          <span style={{ fontSize: 12, color: 'var(--rose)', fontWeight: 400 }}>
             {T(lang, 'signalRecording')} — {recordedSamples.length.toLocaleString()} samples
           </span>
         </div>

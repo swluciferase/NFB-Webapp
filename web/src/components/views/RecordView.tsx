@@ -316,7 +316,7 @@ export const RecordView: FC<RecordViewProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 760 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* Subject info form */}
       <div style={{

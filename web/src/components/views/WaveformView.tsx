@@ -679,10 +679,10 @@ export const WaveformView = ({
             </>
           )}
 
-          {/* Notch button */}
+          {/* Notch button — simple On/Off; comb always covers 50+60+120 Hz */}
           <button
             onClick={() => onFilterChange(
-              { notchFreq: filterParams.notchFreq === 0 ? 50 : filterParams.notchFreq === 50 ? 60 : 0 },
+              { notchFreq: filterParams.notchFreq === 0 ? 60 : 0 },
               ['notch'],
             )}
             style={{
@@ -697,9 +697,7 @@ export const WaveformView = ({
           >
             {filterParams.notchFreq === 0
               ? T(lang, 'signalNotchOff')
-              : filterParams.notchFreq === 50
-                ? T(lang, 'signalNotch50')
-                : T(lang, 'signalNotch60')}
+              : T(lang, 'signalNotchOn')}
           </button>
 
           {/* Event marker button */}

@@ -56,6 +56,7 @@ const translations: Record<string, Record<Lang, string>> = {
   signalAuto: { zh: '自動', en: 'Auto' },
   signalBandpass: { zh: '帶通', en: 'Bandpass' },
   signalNotchOff: { zh: '陷波：關', en: 'Notch: Off' },
+  signalNotchOn:  { zh: '陷波：50+60+120 Hz', en: 'Notch: 50+60+120 Hz' },
   signalNotch50: { zh: '陷波：50 Hz', en: 'Notch: 50 Hz' },
   signalNotch60: { zh: '陷波：60 Hz', en: 'Notch: 60 Hz' },
   signalHpFreq: { zh: '高通 (Hz)', en: 'HP (Hz)' },

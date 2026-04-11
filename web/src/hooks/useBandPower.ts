@@ -32,7 +32,7 @@ export type BandPowerMatrix = number[][];
 // ── Filter helpers (self-contained copy from FftView) ─────────────────────
 
 const BW_Q = [1.3066, 0.5412] as const;
-const NOTCH_Q = 35;
+const NOTCH_Q = 30;
 const FFT_SIZE = 1024;
 
 function computeButterHP(f0: number, fs: number, q: number) {
@@ -57,13 +57,20 @@ function computeButterLP(f0: number, fs: number, q: number) {
   };
 }
 
+// Comb notch: fundamental (f0) + 2nd harmonic (f0×2) + fundamental again
+// Stage layout: ch*6+0/1 = f0, ch*6+2/3 = f0×2, ch*6+4/5 = f0 (extra depth)
+// Matches notchState slot layout in FilterBiquadState (3 stages × 2 states × 8 ch = 48)
 function computeNotchStages(f0: number, fs: number) {
-  const w0 = 2 * Math.PI * f0 / fs;
-  const alpha = Math.sin(w0) / (2 * NOTCH_Q);
-  const cosW = Math.cos(w0);
-  const a0 = 1 + alpha;
-  const c = { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
-  return [c, c, c] as const;
+  const makeCoeff = (freq: number) => {
+    const w0    = 2 * Math.PI * freq / fs;
+    const alpha = Math.sin(w0) / (2 * NOTCH_Q);
+    const cosW  = Math.cos(w0);
+    const a0    = 1 + alpha;
+    return { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
+  };
+  const fundamental = makeCoeff(f0);
+  const harmonic2   = makeCoeff(f0 * 2);
+  return [fundamental, harmonic2, fundamental] as const;
 }
 
 function applyBiquad(

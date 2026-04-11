@@ -1138,14 +1138,23 @@ function makeDefaultIndicators(): EegIndicator[] {
   }));
 }
 
+export interface TrainingSessionStats {
+  running: boolean;
+  duration: number;   // seconds
+  overallScore: number;
+  rewardRate: number;
+  targetPct: number;
+}
+
 export interface TrainingViewProps {
   packets?: EegPacket[];
   filterParams?: FilterParams;
   hidden?: boolean;
   lang?: Lang;
+  onSessionTick?: (stats: TrainingSessionStats) => void;
 }
 
-export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hidden, lang }) => {
+export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hidden, lang, onSessionTick }) => {
   const liveBandPower = useBandPower(packets, filterParams ?? DEFAULT_FILTER_PARAMS);
   // Ref for stale-closure-safe access inside tick
   const liveBandPowerRef = useRef(liveBandPower);
@@ -1281,8 +1290,15 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   // ── Tick: update values from live EEG data only ──
   const sessionRunningRef = useRef(sessionRunning);
   const sessionDurationRef = useRef(sessionDuration);
+  const rewardRateRef = useRef(rewardRate);
+  const overallScoreRef = useRef(overallScore);
   useEffect(() => { sessionRunningRef.current = sessionRunning; }, [sessionRunning]);
   useEffect(() => { sessionDurationRef.current = sessionDuration; }, [sessionDuration]);
+  useEffect(() => { rewardRateRef.current = rewardRate; }, [rewardRate]);
+  useEffect(() => { overallScoreRef.current = overallScore; }, [overallScore]);
+
+  const onSessionTickRef = useRef(onSessionTick);
+  useEffect(() => { onSessionTickRef.current = onSessionTick; }, [onSessionTick]);
 
   const sendToFeedbackWindowRef = useRef(sendToFeedbackWindow);
   useEffect(() => { sendToFeedbackWindowRef.current = sendToFeedbackWindow; }, [sendToFeedbackWindow]);
@@ -1432,10 +1448,17 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
         return current;
       });
 
-      // Session duration counter
+      // Session duration counter + bubble stats to banner
       if (sessionRunningRef.current) {
         setSessionDuration(d => d + 1);
       }
+      onSessionTickRef.current?.({
+        running: sessionRunningRef.current,
+        duration: sessionRunningRef.current ? sessionDurationRef.current + 1 : 0,
+        overallScore: overallScoreRef.current,
+        rewardRate: rewardRateRef.current,
+        targetPct: taPct,
+      });
     }, 1000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps

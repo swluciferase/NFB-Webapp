@@ -1,6 +1,7 @@
 import { useState, useEffect, type FC } from 'react';
 import type { Lang } from '../../i18n';
 import type { ConnectionStatus } from '../../services/serial';
+import type { TrainingSessionStats } from '../views/TrainingView';
 
 export interface SessionBannerProps {
   lang: Lang;
@@ -13,6 +14,7 @@ export interface SessionBannerProps {
   goodTimeSec: number;
   goodPercent: number;
   targetDurationSec: number; // Infinity = manual
+  trainingStats?: TrainingSessionStats | null;
 }
 
 function fmt(ms: number): string {
@@ -53,6 +55,7 @@ const SbItem: FC<{ label: string; value: string; color?: string }> = ({ label, v
 export const SessionBanner: FC<SessionBannerProps> = ({
   lang, status, isRecording, deviceId, packetRate,
   elapsed: elapsedSeed, samplesCount, goodTimeSec, goodPercent, targetDurationSec,
+  trainingStats,
 }) => {
   // Tick every second while recording so duration display is live
   const [tick, setTick] = useState(0);
@@ -71,6 +74,8 @@ export const SessionBanner: FC<SessionBannerProps> = ({
     ? Math.min(100, (goodTimeSec / targetDurationSec) * 100)
     : 0;
 
+  const isTraining = trainingStats?.running === true;
+
   return (
     <div style={{
       flexShrink: 0,
@@ -88,7 +93,7 @@ export const SessionBanner: FC<SessionBannerProps> = ({
         padding: '.28rem 1rem',
         borderRight: '1px solid var(--border)',
         fontSize: '.52rem',
-        color: isRecording ? 'var(--green)' : isConnected ? 'var(--muted)' : 'var(--dim)',
+        color: isTraining ? 'var(--teal)' : isRecording ? 'var(--green)' : isConnected ? 'var(--muted)' : 'var(--dim)',
         letterSpacing: '.06em',
         flexShrink: 0,
         whiteSpace: 'nowrap',
@@ -96,44 +101,67 @@ export const SessionBanner: FC<SessionBannerProps> = ({
         <div style={{
           width: 4, height: 4, borderRadius: '50%',
           background: 'currentColor',
-          animation: isRecording ? 'pulse 1.4s infinite' : 'none',
+          animation: (isTraining || isRecording) ? 'pulse 1.4s infinite' : 'none',
         }} />
-        {isRecording
-          ? (lang === 'zh' ? 'SESSION · 錄製中' : 'SESSION · Recording')
-          : isConnected
-            ? (lang === 'zh' ? 'SESSION · 已連線' : 'SESSION · Connected')
-            : (lang === 'zh' ? 'SESSION · 待機' : 'SESSION · Idle')}
+        {isTraining
+          ? (lang === 'zh' ? 'NFB · 訓練中' : 'NFB · Training')
+          : isRecording
+            ? (lang === 'zh' ? 'SESSION · 錄製中' : 'SESSION · Recording')
+            : isConnected
+              ? (lang === 'zh' ? 'SESSION · 已連線' : 'SESSION · Connected')
+              : (lang === 'zh' ? 'SESSION · 待機' : 'SESSION · Idle')}
       </div>
 
-      {/* Time */}
-      <SbItem
-        label={lang === 'zh' ? '時長' : 'Duration'}
-        value={isRecording ? fmt(elapsed) : '--:--'}
-      />
+      {isTraining ? (
+        /* ── Training session metrics ── */
+        <>
+          <SbItem
+            label={lang === 'zh' ? '訓練時長' : 'Duration'}
+            value={fmtGood(trainingStats!.duration)}
+          />
+          <SbItem
+            label={lang === 'zh' ? '整體分數' : 'Overall'}
+            value={`${trainingStats!.overallScore}%`}
+            color={trainingStats!.overallScore >= 60 ? 'var(--green)' : trainingStats!.overallScore >= 30 ? 'var(--amber)' : 'var(--red)'}
+          />
+          <SbItem
+            label={lang === 'zh' ? '獎勵率' : 'Reward'}
+            value={`${trainingStats!.rewardRate}%`}
+            color="var(--teal)"
+          />
+          <SbItem
+            label={lang === 'zh' ? '當前達標' : 'Target'}
+            value={`${trainingStats!.targetPct}%`}
+            color={trainingStats!.targetPct >= 50 ? 'var(--green)' : 'var(--muted)'}
+          />
+        </>
+      ) : (
+        /* ── Recording metrics ── */
+        <>
+          <SbItem
+            label={lang === 'zh' ? '時長' : 'Duration'}
+            value={isRecording ? fmt(elapsed) : '--:--'}
+          />
+          <SbItem
+            label={lang === 'zh' ? '樣本' : 'Samples'}
+            value={isRecording ? (samplesCount > 999 ? `${Math.floor(samplesCount/1000)}k` : samplesCount.toString()) : '--'}
+            color="var(--teal)"
+          />
+          <SbItem
+            label={lang === 'zh' ? '有效時間' : 'Good Time'}
+            value={isRecording ? fmtGood(goodTimeSec) : '--:--'}
+            color="var(--green)"
+          />
+          <SbItem
+            label={lang === 'zh' ? '品質%' : 'Quality%'}
+            value={isRecording ? `${goodPercent}%` : '--'}
+            color={goodPercent >= 80 ? 'var(--green)' : goodPercent >= 50 ? 'var(--amber)' : 'var(--red)'}
+          />
+        </>
+      )}
 
-      {/* Samples */}
-      <SbItem
-        label={lang === 'zh' ? '樣本' : 'Samples'}
-        value={isRecording ? (samplesCount > 999 ? `${Math.floor(samplesCount/1000)}k` : samplesCount.toString()) : '--'}
-        color="var(--teal)"
-      />
-
-      {/* Good time */}
-      <SbItem
-        label={lang === 'zh' ? '有效時間' : 'Good Time'}
-        value={isRecording ? fmtGood(goodTimeSec) : '--:--'}
-        color="var(--green)"
-      />
-
-      {/* Quality % */}
-      <SbItem
-        label={lang === 'zh' ? '品質%' : 'Quality%'}
-        value={isRecording ? `${goodPercent}%` : '--'}
-        color={goodPercent >= 80 ? 'var(--green)' : goodPercent >= 50 ? 'var(--amber)' : 'var(--red)'}
-      />
-
-      {/* Progress bar */}
-      {isFinite(targetDurationSec) && (
+      {/* Progress bar (recording only) */}
+      {!isTraining && isFinite(targetDurationSec) && (
         <div style={{
           flex: 1, height: 3,
           background: 'rgba(255,255,255,.04)',

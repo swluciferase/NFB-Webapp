@@ -10,7 +10,7 @@ import { ImpedanceView } from './components/views/ImpedanceView';
 import { WaveformView } from './components/views/WaveformView';
 import { FftView } from './components/views/FftView';
 import { RecordView } from './components/views/RecordView';
-import { TrainingView } from './components/views/TrainingView';
+import { TrainingView, type TrainingSessionStats } from './components/views/TrainingView';
 import { ConnectModal } from './components/modals/ConnectModal';
 import { useEegStream } from './hooks/useEegStream';
 import { useQualityMonitor } from './hooks/useQualityMonitor';
@@ -136,6 +136,7 @@ function App() {
 
   // ── Recording state ──
   const [isRecording, setIsRecording] = useState(false);
+  const [trainingStats, setTrainingStats] = useState<TrainingSessionStats | null>(null);
   const [recordedSamples, setRecordedSamples] = useState<RecordedSample[]>([]);
   const [recordStartTime, setRecordStartTime] = useState<Date | null>(null);
   const recordSamplesRef = useRef<RecordedSample[]>([]);
@@ -512,6 +513,7 @@ function App() {
         goodTimeSec={goodTimeSec}
         goodPercent={goodPercent}
         targetDurationSec={qualityConfig.targetDurationSec}
+        trainingStats={trainingStats}
       />
       <div className="main-layout">
 
@@ -665,6 +667,7 @@ function App() {
             filterParams={filterParams}
             hidden={activePage !== 'training'}
             lang={lang}
+            onSessionTick={setTrainingStats}
           />
         </div>
       </div>

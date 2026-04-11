@@ -35,8 +35,16 @@ const CHANNEL_COLORS = [
 
 // ── Filter helpers ──
 
-const BW_Q = [1.3066, 0.5412] as const;
-const NOTCH_Q = 35;
+function compute1stOrderHP(f0: number, fs: number) {
+  const K = Math.tan(Math.PI * f0 / fs);
+  const a0inv = 1 / (1 + K);
+  return { b0: a0inv, b1: -a0inv, b2: 0, a1: (K - 1) * a0inv, a2: 0 };
+}
+function compute1stOrderLP(f0: number, fs: number) {
+  const K = Math.tan(Math.PI * f0 / fs);
+  const a0inv = 1 / (1 + K);
+  return { b0: K * a0inv, b1: K * a0inv, b2: 0, a1: (K - 1) * a0inv, a2: 0 };
+}
 
 function computeButterHP(f0: number, fs: number, q: number) {
   const w0 = 2 * Math.PI * f0 / fs;
@@ -60,9 +68,11 @@ function computeButterLP(f0: number, fs: number, q: number) {
   };
 }
 
-function computeNotchStages(f0: number, fs: number) {
-  const w0 = 2 * Math.PI * f0 / fs;
-  const alpha = Math.sin(w0) / (2 * NOTCH_Q);
+function computeBandstopStages(f1: number, f2: number, fs: number) {
+  const fc = Math.sqrt(f1 * f2);
+  const Q = fc / (f2 - f1);
+  const w0 = 2 * Math.PI * fc / fs;
+  const alpha = Math.sin(w0) / (2 * Q);
   const cosW = Math.cos(w0);
   const a0 = 1 + alpha;
   const c = { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
@@ -88,7 +98,7 @@ function applyFilterChain(
   params: FilterParams,
   hpCoeffs: ReturnType<typeof computeButterHP>[],
   lpCoeffs: ReturnType<typeof computeButterLP>[],
-  notchCoeffs: ReturnType<typeof computeNotchStages>,
+  notchCoeffs: ReturnType<typeof computeBandstopStages>,
 ): number {
   let s = x;
   const dcAlpha = 0.9985;
@@ -283,13 +293,18 @@ export const FftView = ({
 
   const windowFnRef = useRef<Float64Array>(new Float64Array(0));
 
+  // 3rd-order: 1st-order section cascaded with 2nd-order Q=1.0 Butterworth
   const filterCoeffs = useMemo(() => ({
-    hp: BW_Q.map(q => computeButterHP(filterParams.hpFreq, SAMPLE_RATE_HZ, q)),
-    lp: BW_Q.map(q => computeButterLP(filterParams.lpFreq, SAMPLE_RATE_HZ, q)),
-    notch: filterParams.notchFreq !== 0
-      ? computeNotchStages(filterParams.notchFreq, SAMPLE_RATE_HZ)
-      : computeNotchStages(50, SAMPLE_RATE_HZ),
-  }), [filterParams.hpFreq, filterParams.lpFreq, filterParams.notchFreq]);
+    hp: [
+      compute1stOrderHP(filterParams.hpFreq, SAMPLE_RATE_HZ),
+      computeButterHP(filterParams.hpFreq, SAMPLE_RATE_HZ, 1.0),
+    ],
+    lp: [
+      compute1stOrderLP(filterParams.lpFreq, SAMPLE_RATE_HZ),
+      computeButterLP(filterParams.lpFreq, SAMPLE_RATE_HZ, 1.0),
+    ],
+    notch: computeBandstopStages(42, 65, SAMPLE_RATE_HZ),
+  }), [filterParams.hpFreq, filterParams.lpFreq]);
 
   const filterCoeffsRef = useRef(filterCoeffs);
   useEffect(() => { filterCoeffsRef.current = filterCoeffs; }, [filterCoeffs]);

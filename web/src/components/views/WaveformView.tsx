@@ -72,10 +72,19 @@ const formatTime = (ts: number): string => {
 
 // ── Filter coefficient helpers ──
 
-// 4th-order Butterworth biquad coefficients (one stage of two)
-// Q factors for 4th-order Butterworth: stage1=1.3066, stage2=0.5412
-const BW_Q = [1.3066, 0.5412] as const;
+// 1st-order HP/LP sections (for 3rd-order Butterworth cascade)
+function compute1stOrderHP(f0: number, fs: number) {
+  const K = Math.tan(Math.PI * f0 / fs);
+  const a0inv = 1 / (1 + K);
+  return { b0: a0inv, b1: -a0inv, b2: 0, a1: (K - 1) * a0inv, a2: 0 };
+}
+function compute1stOrderLP(f0: number, fs: number) {
+  const K = Math.tan(Math.PI * f0 / fs);
+  const a0inv = 1 / (1 + K);
+  return { b0: K * a0inv, b1: K * a0inv, b2: 0, a1: (K - 1) * a0inv, a2: 0 };
+}
 
+// 2nd-order Butterworth biquad (single Q)
 function computeButterHP(f0: number, fs: number, q: number) {
   const w0 = 2 * Math.PI * f0 / fs;
   const alpha = Math.sin(w0) / (2 * q);
@@ -104,15 +113,16 @@ function computeButterLP(f0: number, fs: number, q: number) {
   };
 }
 
-// 3-stage cascaded notch biquad coefficients
-const NOTCH_Q = 35;
-function computeNotchStages(f0: number, fs: number) {
-  const w0 = 2 * Math.PI * f0 / fs;
-  const alpha = Math.sin(w0) / (2 * NOTCH_Q);
+// 3-stage cascaded bandstop (notch) — centered at geometric mean of f1,f2
+function computeBandstopStages(f1: number, f2: number, fs: number) {
+  const fc = Math.sqrt(f1 * f2);
+  const Q = fc / (f2 - f1);
+  const w0 = 2 * Math.PI * fc / fs;
+  const alpha = Math.sin(w0) / (2 * Q);
   const cosW = Math.cos(w0);
   const a0 = 1 + alpha;
   const c = { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
-  return [c, c, c] as const; // same coefficients for all 3 stages
+  return [c, c, c] as const;
 }
 
 // Apply a single biquad stage (Direct Form II transposed)
@@ -137,7 +147,7 @@ function applyFilterChain(
   params: FilterParams,
   hpCoeffs: ReturnType<typeof computeButterHP>[],
   lpCoeffs: ReturnType<typeof computeButterLP>[],
-  notchCoeffs: ReturnType<typeof computeNotchStages>,
+  notchCoeffs: ReturnType<typeof computeBandstopStages>,
 ): number {
   let s = x;
 
@@ -211,14 +221,20 @@ export const WaveformView = ({
   const timeGridDivsRef = useRef<HTMLDivElement[]>([]);
 
   // Precompute filter coefficients from filterParams
+  // 3rd-order: 1st-order section cascaded with 2nd-order Q=1.0 Butterworth section
   const filterCoeffs = useMemo(() => {
-    const hp = BW_Q.map(q => computeButterHP(filterParams.hpFreq, SAMPLE_RATE_HZ, q));
-    const lp = BW_Q.map(q => computeButterLP(filterParams.lpFreq, SAMPLE_RATE_HZ, q));
-    const notch = filterParams.notchFreq !== 0
-      ? computeNotchStages(filterParams.notchFreq, SAMPLE_RATE_HZ)
-      : computeNotchStages(50, SAMPLE_RATE_HZ); // placeholder, won't be used when notchFreq=0
+    const hp = [
+      compute1stOrderHP(filterParams.hpFreq, SAMPLE_RATE_HZ),
+      computeButterHP(filterParams.hpFreq, SAMPLE_RATE_HZ, 1.0),
+    ];
+    const lp = [
+      compute1stOrderLP(filterParams.lpFreq, SAMPLE_RATE_HZ),
+      computeButterLP(filterParams.lpFreq, SAMPLE_RATE_HZ, 1.0),
+    ];
+    // Fixed bandstop 42–65 Hz (ignores notchFreq value; notchFreq=0 disables)
+    const notch = computeBandstopStages(42, 65, SAMPLE_RATE_HZ);
     return { hp, lp, notch };
-  }, [filterParams.hpFreq, filterParams.lpFreq, filterParams.notchFreq]);
+  }, [filterParams.hpFreq, filterParams.lpFreq]);
 
   const filterCoeffsRef = useRef(filterCoeffs);
   useEffect(() => { filterCoeffsRef.current = filterCoeffs; }, [filterCoeffs]);

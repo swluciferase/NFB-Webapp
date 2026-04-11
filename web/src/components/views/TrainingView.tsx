@@ -600,9 +600,9 @@ const CardiacCard: FC<{
           { label: 'RMSSD', value: isLive && state.rmssd > 0 ? `${state.rmssd.toFixed(1)}ms` : '—', color: 'rgba(200,215,235,.55)' },
           { label: 'RMSSD-T', value: isLive && state.rmssdTscore > 0 ? state.rmssdTscore.toFixed(1) : '—', color: state.metric === 'rmssd-t' ? '#c084fc' : 'var(--muted)' },
         ].map(item => (
-          <div key={item.label} style={{ flex: 1, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.22rem .3rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '.5rem', color: 'var(--text)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '.1rem' }}>{item.label}</div>
-            <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: '.7rem', color: item.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{item.value}</div>
+          <div key={item.label} style={{ flex: 1, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.18rem .28rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+            <div style={{ fontSize: '.44rem', color: 'var(--text)', letterSpacing: '.05em', textTransform: 'uppercase', lineHeight: 1.2, whiteSpace: 'nowrap' }}>{item.label}</div>
+            <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: '.64rem', color: item.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, whiteSpace: 'nowrap' }}>{item.value}</div>
           </div>
         ))}
       </div>
@@ -870,7 +870,7 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
   const formatHz = (v: number) => v < 10 ? v.toFixed(2) : v.toFixed(1);
 
   return (
-    <div style={{ flex: 1, padding: '4px 2px' }}>
+    <div style={{ flexShrink: 0, padding: '4px 2px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <span style={{ fontWeight: 700, fontSize: 14, color: '#8ecfff' }}>{T(lang, 'trainBnbTitle')}</span>
         <Badge label="Binaural Beat" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
@@ -971,21 +971,23 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
         )}
       </div>
       <div style={{ display: 'flex', gap: 0, marginBottom: 8, opacity: bnb.bbFixed ? 0.35 : 1, pointerEvents: bnb.bbFixed ? 'none' : 'auto', background: 'var(--bg-tertiary)', borderRadius: 7, overflow: 'hidden', border: '1px solid var(--border)' }}>
-        <div style={{ flex: 1, padding: '6px 8px', borderRight: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 3 }}>Min Hz</div>
+        <div style={{ flex: 1, padding: '4px 6px', borderRight: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 9, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Min</span>
           <input type="number" min={0.5} max={100} step={0.5} value={bnb.bbMinHz}
             onChange={e => onChange({ bbMinHz: parseFloat(e.target.value) || 0.5 })}
-            style={{ ...inputStyle, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', padding: '2px 0' }} disabled={bnb.bbFixed} />
+            style={{ ...inputStyle, flex: 1, minWidth: 0, textAlign: 'center', background: 'transparent', border: 'none', padding: '2px 0', fontSize: 12 }} disabled={bnb.bbFixed} />
+          <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>Hz</span>
         </div>
-        <div style={{ flex: 1, padding: '6px 8px', borderRight: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 3 }}>Max Hz</div>
+        <div style={{ flex: 1, padding: '4px 6px', borderRight: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 9, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Max</span>
           <input type="number" min={0.5} max={100} step={0.5} value={bnb.bbMaxHz}
             onChange={e => onChange({ bbMaxHz: parseFloat(e.target.value) || 1 })}
-            style={{ ...inputStyle, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', padding: '2px 0' }} disabled={bnb.bbFixed} />
+            style={{ ...inputStyle, flex: 1, minWidth: 0, textAlign: 'center', background: 'transparent', border: 'none', padding: '2px 0', fontSize: 12 }} disabled={bnb.bbFixed} />
+          <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>Hz</span>
         </div>
-        <div style={{ flex: 1.2, padding: '6px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 3 }}>{T(lang, 'trainCurrentBeat')}</div>
-          <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, fontWeight: 700, color: '#58a6ff', lineHeight: 1 }}>{formatHz(bnb.bbCurrentHz)} Hz</span>
+        <div style={{ flex: 1.2, padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+          <span style={{ fontSize: 9, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{T(lang, 'trainCurrentBeat')}</span>
+          <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 13, fontWeight: 700, color: '#58a6ff', lineHeight: 1 }}>{formatHz(bnb.bbCurrentHz)}</span>
         </div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
@@ -1594,7 +1596,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     display: 'flex', flexDirection: 'column', gap: 0,
     overflowY: 'auto', overflowX: 'hidden',
     background: 'var(--bg)',
-    padding: '.58rem .52rem',
+    padding: '.58rem .52rem 1.5rem',
   };
   const sectionHeaderStyle: React.CSSProperties = {
     fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase',

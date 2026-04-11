@@ -65,8 +65,8 @@ export const SAMPLE_RATE_HZ = 1001;
 
 export const DEFAULT_FILTER_PARAMS: FilterParams = {
   bandpassEnabled: true,
-  hpFreq: 0.5,
-  lpFreq: 45,
+  hpFreq: 0.25,
+  lpFreq: 85,
   notchFreq: 60,
 };
 

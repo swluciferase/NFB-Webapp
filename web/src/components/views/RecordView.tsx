@@ -490,62 +490,53 @@ export const RecordView: FC<RecordViewProps> = ({
         </div>
 
         {qualityConfig.enabled && (<>
-          {/* Row: Target duration + CCA on same row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.34rem' }}>
+          {/* Row: Target duration + sensitivity + CCA on same row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.42rem', marginBottom: '.34rem' }}>
             <label style={{ ...lblStyle, margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
               {T(lang, 'recordTargetDuration')}
             </label>
             <input type="range" min={0} max={TARGET_DURATION_OPTIONS.length - 1} step={1}
               value={(() => { const i = TARGET_DURATION_OPTIONS.findIndex(o => o.value === qualityConfig.targetDurationSec); return i >= 0 ? i : 2; })()}
               onChange={e => { const o = TARGET_DURATION_OPTIONS[Number(e.target.value)]; if (o) onQualityConfigChange({ ...qualityConfig, targetDurationSec: o.value }); }}
-              disabled={isRecording} style={{ flex: 1, cursor: isRecording ? 'not-allowed' : 'pointer', accentColor: 'var(--mauve)' }} />
-            <span style={{ fontSize: '.72rem', color: 'var(--mauve)', minWidth: 36, textAlign: 'right', flexShrink: 0 }}>
-              {isFinite(qualityConfig.targetDurationSec) ? `${qualityConfig.targetDurationSec}s` : T(lang, 'recordDurationManual')}
+              disabled={isRecording} style={{ flex: 1, cursor: isRecording ? 'not-allowed' : 'pointer', accentColor: 'var(--mauve)', minWidth: 0 }} />
+            <span style={{ fontSize: '.72rem', color: 'var(--mauve)', minWidth: 30, textAlign: 'right', flexShrink: 0 }}>
+              {isFinite(qualityConfig.targetDurationSec) ? `${qualityConfig.targetDurationSec}s` : '∞'}
             </span>
-            <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0 }} />
-            {/* CCA toggle on same row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '.38rem', flexShrink: 0 }}>
-              <div style={{
-                width: 25, height: 12, background: useArtifactRemoval ? 'rgba(152,136,168,.3)' : 'rgba(255,255,255,.05)',
-                borderRadius: 6, border: `1px solid ${useArtifactRemoval ? 'rgba(152,136,168,.3)' : 'var(--border)'}`,
-                position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background .2s',
-              }} onClick={() => setUseArtifactRemoval(v => !v)}>
-                <div style={{
-                  position: 'absolute', width: 6, height: 6, borderRadius: '50%',
-                  background: useArtifactRemoval ? 'var(--mauve)' : 'var(--muted)',
-                  top: 2, left: useArtifactRemoval ? 15 : 2, transition: 'left .18s, background .18s',
-                }} />
-              </div>
-              <span style={{ fontSize: '.7rem', color: 'var(--cream)', whiteSpace: 'nowrap' }}>
-                {lang === 'zh' ? '去雜訊 CCA' : 'CCA'}
-              </span>
-            </div>
-          </div>
-
-          {/* Row: Sensitivity */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '.38rem', marginBottom: '.36rem' }}>
-            <label style={{ ...lblStyle, margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {T(lang, 'recordSensitivity')}
-            </label>
-            <div style={{ display: 'flex', gap: '.2rem', flex: 1 }}>
+            <div style={{ width: 1, height: 14, background: 'var(--border)', flexShrink: 0 }} />
+            {/* Sensitivity 1–5 compact buttons */}
+            <div style={{ display: 'flex', gap: '.1rem', flexShrink: 0 }}>
               {([1, 2, 3, 4, 5] as const).map(level => (
                 <button key={level}
                   onClick={() => onQualityConfigChange({ ...qualityConfig, sensitivity: level })}
+                  title={`${T(lang, 'recordSensitivity')} ${level}`}
                   style={{
-                    flex: 1, padding: '.22rem 0', fontSize: '.64rem', fontWeight: 600,
+                    width: 20, height: 20, padding: 0, fontSize: '.58rem', fontWeight: 600,
                     border: `1px solid ${qualityConfig.sensitivity === level ? 'rgba(152,136,168,.5)' : 'var(--border)'}`,
                     borderRadius: 1,
-                    background: qualityConfig.sensitivity === level ? 'rgba(152,136,168,.08)' : 'transparent',
+                    background: qualityConfig.sensitivity === level ? 'rgba(152,136,168,.12)' : 'transparent',
                     color: qualityConfig.sensitivity === level ? 'var(--mauve)' : 'var(--text)',
-                    cursor: 'pointer',
+                    cursor: 'pointer', lineHeight: 1,
                   }}>
                   {level}
                 </button>
               ))}
             </div>
-            <span style={{ fontSize: '.56rem', color: 'var(--muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {T(lang, 'recordSensitivityLenient')} → {T(lang, 'recordSensitivityStrict')}
-            </span>
+            <div style={{ width: 1, height: 14, background: 'var(--border)', flexShrink: 0 }} />
+            {/* CCA toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.3rem', flexShrink: 0 }}>
+              <div style={{
+                width: 22, height: 11, background: useArtifactRemoval ? 'rgba(152,136,168,.3)' : 'rgba(255,255,255,.05)',
+                borderRadius: 6, border: `1px solid ${useArtifactRemoval ? 'rgba(152,136,168,.3)' : 'var(--border)'}`,
+                position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background .2s',
+              }} onClick={() => setUseArtifactRemoval(v => !v)}>
+                <div style={{
+                  position: 'absolute', width: 5, height: 5, borderRadius: '50%',
+                  background: useArtifactRemoval ? 'var(--mauve)' : 'var(--muted)',
+                  top: 2, left: useArtifactRemoval ? 13 : 2, transition: 'left .18s, background .18s',
+                }} />
+              </div>
+              <span style={{ fontSize: '.62rem', color: 'var(--cream)', whiteSpace: 'nowrap' }}>CCA</span>
+            </div>
           </div>
 
           {/* Stats row */}

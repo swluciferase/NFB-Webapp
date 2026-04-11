@@ -233,28 +233,28 @@ export const ImpedanceView: FC<ImpedanceViewProps> = ({
       </svg>
 
       {/* ── Impedance legend with ranges ── */}
-      <div style={{ marginTop: '.25rem', flexShrink: 0 }}>
+      <div style={{ marginTop: '.12rem', flexShrink: 0 }}>
         {/* Gradient bar */}
         <div style={{
-          height: 4, borderRadius: 3,
+          height: 3, borderRadius: 2,
           background: 'linear-gradient(to right, #3fb950, #85e89d 28%, #e3a030 55%, #f85149)',
-          marginBottom: '.2rem', position: 'relative',
+          marginBottom: '.12rem', position: 'relative',
         }}>
           {[28, 55, 78].map(pct => (
             <div key={pct} style={{ position: 'absolute', left: `${pct}%`, top: 0, bottom: 0, width: 1, background: 'rgba(20,16,28,0.5)' }} />
           ))}
         </div>
-        {/* 4-cell quality labels — single line each */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '.15rem' }}>
+        {/* 4-cell quality labels — compact single row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '.1rem' }}>
           {[
-            { color: '#3fb950',        label: lang === 'zh' ? '優秀' : 'Excellent', range: '<150 kΩ' },
-            { color: '#85e89d',        label: lang === 'zh' ? '良好' : 'Good',      range: '<300 kΩ' },
-            { color: 'var(--amber)',   label: lang === 'zh' ? '尚可' : 'Fair',      range: '<600 kΩ' },
-            { color: 'var(--red)',     label: lang === 'zh' ? '不良' : 'Poor',      range: '≥600 kΩ' },
+            { color: '#3fb950',        label: lang === 'zh' ? '優秀' : 'Exc', range: '<150k' },
+            { color: '#85e89d',        label: lang === 'zh' ? '良好' : 'Good', range: '<300k' },
+            { color: 'var(--amber)',   label: lang === 'zh' ? '尚可' : 'Fair', range: '<600k' },
+            { color: 'var(--red)',     label: lang === 'zh' ? '不良' : 'Poor', range: '≥600k' },
           ].map(item => (
-            <div key={item.label} style={{ background: 'rgba(20,16,28,.4)', borderRadius: 1, padding: '.12rem .18rem', border: `1px solid ${item.color}22`, display: 'flex', alignItems: 'center', gap: '.2rem', overflow: 'hidden' }}>
-              <span style={{ fontSize: '.54rem', color: item.color, fontWeight: 600, lineHeight: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
-              <span style={{ fontSize: '.46rem', color: 'var(--muted)', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.range}</span>
+            <div key={item.label} style={{ background: 'rgba(20,16,28,.4)', borderRadius: 1, padding: '.06rem .12rem', border: `1px solid ${item.color}22`, display: 'flex', alignItems: 'center', gap: '.15rem', overflow: 'hidden' }}>
+              <span style={{ fontSize: '.5rem', color: item.color, fontWeight: 600, lineHeight: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
+              <span style={{ fontSize: '.42rem', color: 'var(--muted)', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.range}</span>
             </div>
           ))}
         </div>

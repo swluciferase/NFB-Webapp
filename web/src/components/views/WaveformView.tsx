@@ -439,9 +439,6 @@ export const WaveformView = ({
           if (visible[ch]) {
             uv = channels[ch] ?? 0;
             uv = applyFilterChain(uv, ch, biquad, fp, hp, lp, notch);
-            // ③ Post-filter soft clamp: tanh compresses beyond ±scale,
-            //    prevents large transients from dominating the display
-            uv = scale * Math.tanh(uv / scale);
           }
           // Write y value directly into the flat xy array at this sweep position
           lines[ch]!.xy[sweepPos * 2 + 1] = toClipY(uv, ch, scale);

@@ -23,14 +23,14 @@ const DB_RANGE_OPTIONS = [
 ] as const;
 
 const CHANNEL_COLORS = [
-  'rgba(255, 51, 51, 0.85)',
-  'rgba(51, 102, 255, 0.85)',
-  'rgba(51, 255, 102, 0.85)',
-  'rgba(255, 255, 51, 0.85)',
-  'rgba(51, 255, 255, 0.85)',
-  'rgba(255, 51, 255, 0.85)',
-  'rgba(255, 153, 51, 0.85)',
-  'rgba(178, 51, 255, 0.85)',
+  'rgba(220, 100, 110, 0.85)',  // coral rose   — Fp1
+  'rgba(100, 160, 215, 0.85)',  // dusty blue   — Fp2
+  'rgba(90,  185, 130, 0.85)',  // sage green   — T7
+  'rgba(220, 175, 75,  0.85)',  // warm amber   — T8
+  'rgba(70,  185, 200, 0.85)',  // muted teal   — O1
+  'rgba(185, 130, 215, 0.85)',  // soft lavender— O2
+  'rgba(215, 135, 80,  0.85)',  // warm copper  — Fz
+  'rgba(140, 105, 200, 0.85)',  // dusty violet — Pz
 ];
 
 // ── Filter helpers ──
@@ -182,7 +182,7 @@ function drawPanelHistogram(
   chColor: string,
   chLabel: string,
 ) {
-  ctx.fillStyle = 'rgba(8,17,30,0.97)';
+  ctx.fillStyle = 'rgba(18,14,24,0.97)';
   ctx.fillRect(0, 0, width, height);
 
   const PAD_LEFT = 6, PAD_RIGHT = 6, PAD_TOP = 20, PAD_BOTTOM = 18;
@@ -197,11 +197,11 @@ function drawPanelHistogram(
     Math.max(0, Math.min(FFT_SIZE / 2, Math.round((hz / SAMPLE_RATE_HZ) * FFT_SIZE)));
 
   const EEG_BANDS = [
-    { name: 'δ', startHz: 0.5, endHz: 4,  tint: 'rgba(102,153,255,0.10)' },
-    { name: 'θ', startHz: 4,   endHz: 8,  tint: 'rgba(179,120,255,0.09)' },
-    { name: 'α', startHz: 8,   endHz: 13, tint: 'rgba(92,214,130,0.09)'  },
-    { name: 'β', startHz: 13,  endHz: 30, tint: 'rgba(255,221,102,0.08)' },
-    { name: 'γ', startHz: 30,  endHz: 60, tint: 'rgba(255,128,128,0.08)' },
+    { name: 'δ', startHz: 0.5, endHz: 4,  tint: 'rgba(100,80,180,0.10)' },
+    { name: 'θ', startHz: 4,   endHz: 8,  tint: 'rgba(155,95,200,0.09)' },
+    { name: 'α', startHz: 8,   endHz: 13, tint: 'rgba(80,175,120,0.09)' },
+    { name: 'β', startHz: 13,  endHz: 30, tint: 'rgba(200,160,60,0.08)' },
+    { name: 'γ', startHz: 30,  endHz: 60, tint: 'rgba(200,80,100,0.08)' },
   ];
   for (const band of EEG_BANDS) {
     if (band.startHz >= maxFreq) continue;
@@ -209,7 +209,7 @@ function drawPanelHistogram(
     const x1 = freqToX(Math.min(band.endHz, maxFreq));
     ctx.fillStyle = band.tint;
     ctx.fillRect(x0, PAD_TOP, Math.max(1, x1 - x0), ch);
-    ctx.fillStyle = 'rgba(200,215,235,0.55)';
+    ctx.fillStyle = 'rgba(180,165,200,0.55)';
     ctx.font = '9px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(band.name, x0 + (x1 - x0) / 2, PAD_TOP - 3);
@@ -241,7 +241,7 @@ function drawPanelHistogram(
     }
   }
 
-  ctx.fillStyle = 'rgba(160,180,210,0.7)';
+  ctx.fillStyle = 'rgba(140,120,165,0.7)';
   ctx.font = '9px monospace';
   ctx.textAlign = 'center';
   const hzStep = maxFreq <= 30 ? 5 : maxFreq <= 60 ? 10 : 20;
@@ -385,10 +385,10 @@ export const FftView = ({
   const hasData = packets && packets.length > 0;
 
   const btnStyle = (active: boolean): CSSProperties => ({
-    background: active ? 'rgba(60,130,220,0.35)' : 'transparent',
-    border: `1px solid ${active ? 'rgba(60,130,220,0.6)' : 'rgba(93,109,134,0.4)'}`,
+    background: active ? 'rgba(120,80,160,0.3)' : 'transparent',
+    border: `1px solid ${active ? 'rgba(150,105,200,0.55)' : 'rgba(94,88,112,0.4)'}`,
     borderRadius: 5,
-    color: active ? '#8ecfff' : 'rgba(160,180,210,0.5)',
+    color: active ? '#ccc4d4' : 'rgba(152,136,168,0.5)',
     fontSize: 11,
     padding: '3px 9px',
     cursor: 'pointer',
@@ -401,15 +401,15 @@ export const FftView = ({
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '6px 12px',
-        background: 'rgba(5,14,23,0.8)',
-        border: '1px solid rgba(93,109,134,0.35)',
+        background: 'rgba(18,14,22,0.9)',
+        border: '1px solid rgba(94,88,112,0.35)',
         borderRadius: 10,
         flexWrap: 'wrap',
         gap: 8,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Y-axis dB range */}
-          <span style={{ fontSize: 12, color: 'rgba(160,180,210,0.7)' }}>Y:</span>
+          <span style={{ fontSize: 12, color: 'rgba(152,136,168,0.7)' }}>Y:</span>
           {DB_RANGE_OPTIONS.map((opt, idx) => (
             <button
               key={idx}
@@ -423,7 +423,7 @@ export const FftView = ({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Max freq */}
-          <span style={{ fontSize: 12, color: 'rgba(160,180,210,0.7)' }}>{T(lang, 'fftMaxFreq')}:</span>
+          <span style={{ fontSize: 12, color: 'rgba(152,136,168,0.7)' }}>{T(lang, 'fftMaxFreq')}:</span>
           {MAX_FREQ_OPTIONS.map(f => (
             <button key={f} onClick={() => { maxFreqRef.current = f; setMaxFreq(f); }} style={btnStyle(maxFreq === f)}>
               {f} Hz
@@ -437,7 +437,7 @@ export const FftView = ({
         {Array.from({ length: CHANNEL_COUNT }, (_, ch) => (
           <div key={ch} style={{
             position: 'relative',
-            border: '1px solid rgba(93,109,134,0.3)',
+            border: '1px solid rgba(94,88,112,0.3)',
             borderRadius: 8,
             overflow: 'hidden',
             minHeight: 120,
@@ -446,10 +446,10 @@ export const FftView = ({
               <div style={{
                 position: 'absolute', inset: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(5,12,22,0.7)',
+                background: 'rgba(18,14,22,0.7)',
                 zIndex: 10,
               }}>
-                <span style={{ fontSize: 12, color: 'rgba(140,165,200,0.5)' }}>
+                <span style={{ fontSize: 12, color: 'rgba(120,105,140,0.5)' }}>
                   {CHANNEL_LABELS[ch]}
                 </span>
               </div>

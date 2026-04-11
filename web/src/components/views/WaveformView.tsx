@@ -24,14 +24,14 @@ export interface WaveformViewProps {
 }
 
 const CHANNEL_COLORS: [number, number, number, number][] = [
-  [1, 0.2,  0.2,  1],
-  [0.2, 0.4,  1,    1],
-  [0.2, 1,    0.4,  1],
-  [1,   1,    0.2,  1],
-  [0.2, 1,    1,    1],
-  [1,   0.2,  1,    1],
-  [1,   0.6,  0.2,  1],
-  [0.7, 0.2,  1,    1],
+  [0.86, 0.39, 0.43, 1],  // coral rose   — Fp1
+  [0.39, 0.63, 0.84, 1],  // dusty blue   — Fp2
+  [0.35, 0.73, 0.51, 1],  // sage green   — T7
+  [0.86, 0.67, 0.29, 1],  // warm amber   — T8
+  [0.27, 0.73, 0.78, 1],  // muted teal   — O1
+  [0.71, 0.51, 0.84, 1],  // soft lavender— O2
+  [0.84, 0.53, 0.31, 1],  // warm copper  — Fz
+  [0.55, 0.41, 0.78, 1],  // dusty violet — Pz
 ];
 
 const SCALE_OPTIONS = [
@@ -474,10 +474,10 @@ export const WaveformView = ({
   const MAX_TIME_TICKS = 20;
 
   const selectStyle: CSSProperties = {
-    background: 'rgba(10, 20, 35, 0.9)',
-    border: '1px solid rgba(93, 109, 134, 0.5)',
+    background: 'rgba(22, 18, 28, 0.9)',
+    border: '1px solid rgba(94, 88, 112, 0.5)',
     borderRadius: 6,
-    color: '#cdd6e8',
+    color: '#ccc4d4',
     fontSize: 12,
     padding: '4px 8px',
     cursor: 'pointer',
@@ -485,10 +485,10 @@ export const WaveformView = ({
   };
 
   const btnStyle = (active: boolean): CSSProperties => ({
-    background: active ? 'rgba(60, 130, 220, 0.35)' : 'transparent',
-    border: `1px solid ${active ? 'rgba(60,130,220,0.6)' : 'rgba(93,109,134,0.4)'}`,
+    background: active ? 'rgba(120, 80, 160, 0.3)' : 'transparent',
+    border: `1px solid ${active ? 'rgba(140,100,180,0.55)' : 'rgba(94,88,112,0.4)'}`,
     borderRadius: 5,
-    color: active ? '#cdd6e8' : 'rgba(180,190,210,0.5)',
+    color: active ? '#ccc4d4' : 'rgba(152,136,168,0.5)',
     fontSize: 11,
     padding: '3px 7px',
     cursor: 'pointer',
@@ -498,10 +498,10 @@ export const WaveformView = ({
 
   const inputStyle: CSSProperties = {
     width: 52,
-    background: 'rgba(10,20,35,0.9)',
-    border: '1px solid rgba(93,109,134,0.5)',
+    background: 'rgba(22,18,28,0.9)',
+    border: '1px solid rgba(94,88,112,0.5)',
     borderRadius: 5,
-    color: '#cdd6e8',
+    color: '#ccc4d4',
     fontSize: 12,
     padding: '3px 6px',
     outline: 'none',
@@ -517,8 +517,8 @@ export const WaveformView = ({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '6px 10px',
-        background: 'rgba(5, 14, 23, 0.8)',
-        border: '1px solid rgba(93, 109, 134, 0.35)',
+        background: 'rgba(18, 14, 22, 0.9)',
+        border: '1px solid rgba(94, 88, 112, 0.35)',
         borderRadius: 10,
         gap: 8,
         flexWrap: 'wrap',
@@ -544,7 +544,7 @@ export const WaveformView = ({
         {/* Right controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {/* Time window */}
-          <label style={{ color: 'rgba(180,195,215,0.7)', fontSize: 12 }}>{T(lang, 'signalTime')}:</label>
+          <label style={{ color: 'rgba(152,136,168,0.7)', fontSize: 12 }}>{T(lang, 'signalTime')}:</label>
           <select value={windowSeconds} onChange={e => setWindowSeconds(Number(e.target.value))} style={selectStyle}>
             {TIME_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
@@ -559,10 +559,10 @@ export const WaveformView = ({
           <button
             onClick={handleAutoScale}
             style={{
-              background: 'rgba(40,100,60,0.4)',
-              border: '1px solid rgba(60,180,100,0.5)',
+              background: 'rgba(50,110,75,0.3)',
+              border: '1px solid rgba(80,165,105,0.5)',
               borderRadius: 6,
-              color: 'rgba(100,220,140,0.9)',
+              color: 'rgba(100,195,130,0.9)',
               fontSize: 12,
               padding: '4px 10px',
               cursor: 'pointer',
@@ -573,15 +573,15 @@ export const WaveformView = ({
 
           {/* Bandpass toggle + HP/LP inputs */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 11, color: filterParams.bandpassEnabled ? 'rgba(120,195,255,0.9)' : 'rgba(180,200,230,0.5)' }}>
+            <span style={{ fontSize: 11, color: filterParams.bandpassEnabled ? 'rgba(170,145,210,0.9)' : 'rgba(152,136,168,0.5)' }}>
               {T(lang, 'signalBandpass')}
             </span>
             <div
               onClick={() => onFilterChange({ bandpassEnabled: !filterParams.bandpassEnabled }, ['hp', 'lp'])}
               style={{
                 width: 34, height: 18, borderRadius: 9,
-                background: filterParams.bandpassEnabled ? 'rgba(50,120,220,0.75)' : 'rgba(30,42,60,0.75)',
-                border: `1px solid ${filterParams.bandpassEnabled ? 'rgba(80,150,255,0.6)' : 'rgba(93,109,134,0.4)'}`,
+                background: filterParams.bandpassEnabled ? 'rgba(110,70,160,0.75)' : 'rgba(30,24,40,0.75)',
+                border: `1px solid ${filterParams.bandpassEnabled ? 'rgba(150,105,200,0.6)' : 'rgba(94,88,112,0.4)'}`,
                 position: 'relative', cursor: 'pointer',
                 flexShrink: 0,
               }}
@@ -590,7 +590,7 @@ export const WaveformView = ({
                 position: 'absolute',
                 top: 2, left: filterParams.bandpassEnabled ? 17 : 2,
                 width: 12, height: 12, borderRadius: 6,
-                background: filterParams.bandpassEnabled ? '#8ecfff' : '#6a7a90',
+                background: filterParams.bandpassEnabled ? '#b094c8' : '#6a6278',
                 transition: 'left 0.15s',
               }} />
             </div>
@@ -599,7 +599,7 @@ export const WaveformView = ({
           {/* HP freq input */}
           {filterParams.bandpassEnabled && (
             <>
-              <label style={{ fontSize: 11, color: 'rgba(160,180,210,0.7)' }}>{T(lang, 'signalHpFreq')}:</label>
+              <label style={{ fontSize: 11, color: 'rgba(152,136,168,0.7)' }}>{T(lang, 'signalHpFreq')}:</label>
               <input
                 type="number"
                 min="0.1" max="20" step="0.5"
@@ -615,7 +615,7 @@ export const WaveformView = ({
                 }}
                 style={inputStyle}
               />
-              <label style={{ fontSize: 11, color: 'rgba(160,180,210,0.7)' }}>{T(lang, 'signalLpFreq')}:</label>
+              <label style={{ fontSize: 11, color: 'rgba(152,136,168,0.7)' }}>{T(lang, 'signalLpFreq')}:</label>
               <input
                 type="number"
                 min="5" max="490" step="1"
@@ -661,10 +661,10 @@ export const WaveformView = ({
           <button
             onClick={addMarker}
             style={{
-              background: 'rgba(200,200,0,0.12)',
-              border: '1px solid rgba(220,220,0,0.4)',
+              background: 'rgba(180,155,60,0.12)',
+              border: '1px solid rgba(210,180,70,0.4)',
               borderRadius: 6,
-              color: 'rgba(240,230,80,0.9)',
+              color: 'rgba(220,195,90,0.9)',
               fontSize: 12,
               padding: '4px 10px',
               cursor: 'pointer',
@@ -700,11 +700,11 @@ export const WaveformView = ({
         position: 'relative',
         flex: 1,
         minHeight: 360,
-        border: '1px solid rgba(93,109,134,0.35)',
+        border: '1px solid rgba(94,88,112,0.35)',
         borderRadius: 12,
         background:
-          'radial-gradient(circle at 15% 18%, rgba(39,81,138,0.2), rgba(8,16,28,0.95) 48%), ' +
-          'linear-gradient(160deg, rgba(5,14,23,1), rgba(8,12,20,1))',
+          'radial-gradient(circle at 15% 18%, rgba(90,50,120,0.18), rgba(18,14,26,0.97) 52%), ' +
+          'linear-gradient(160deg, rgba(20,16,26,1), rgba(16,12,22,1))',
         overflow: 'hidden',
       }}>
         {/* Not connected overlay */}
@@ -713,14 +713,14 @@ export const WaveformView = ({
             position: 'absolute', inset: 0,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             zIndex: 20,
-            background: 'rgba(5,12,22,0.65)',
+            background: 'rgba(18,14,24,0.65)',
           }}>
             <div style={{
               fontSize: 42, marginBottom: 12,
-              color: 'rgba(88,130,180,0.35)',
+              color: 'rgba(120,90,150,0.35)',
             }}>〜</div>
             <div style={{
-              fontSize: 15, color: 'rgba(140,165,200,0.65)',
+              fontSize: 15, color: 'rgba(152,136,168,0.65)',
               fontWeight: 500,
             }}>
               {T(lang, 'signalNotConnected')}
@@ -731,8 +731,8 @@ export const WaveformView = ({
         {/* Channel labels */}
         <div style={{
           position: 'absolute', top: 0, left: 0, bottom: 0, width: 64,
-          borderRight: '1px solid rgba(93,109,134,0.25)',
-          background: 'linear-gradient(180deg, rgba(9,21,38,0.8), rgba(7,15,27,0.8))',
+          borderRight: '1px solid rgba(94,88,112,0.25)',
+          background: 'linear-gradient(180deg, rgba(22,16,30,0.8), rgba(18,12,26,0.8))',
           zIndex: 10,
         }}>
           {labels.map((label, i) => (
@@ -869,8 +869,8 @@ export const WaveformView = ({
         <div style={{
           position: 'absolute', bottom: 0, right: 0, height: 20, left: 64,
           pointerEvents: 'none', overflow: 'hidden', zIndex: 6,
-          borderTop: '1px solid rgba(93,109,134,0.2)',
-          background: 'rgba(5,12,22,0.5)',
+          borderTop: '1px solid rgba(94,88,112,0.2)',
+          background: 'rgba(18,14,22,0.5)',
         }}>
           {Array.from({ length: MAX_TIME_TICKS }, (_, k) => (
             <div
@@ -880,7 +880,7 @@ export const WaveformView = ({
                 position: 'absolute',
                 top: 3,
                 transform: 'translateX(-50%)',
-                color: 'rgba(160,185,220,0.65)',
+                color: 'rgba(140,120,165,0.65)',
                 fontSize: 10,
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                 whiteSpace: 'nowrap',
@@ -897,14 +897,14 @@ export const WaveformView = ({
       <div style={{
         maxHeight: 160,
         overflowY: 'auto',
-        border: '1px solid rgba(93,109,134,0.3)',
+        border: '1px solid rgba(94,88,112,0.3)',
         borderRadius: 10,
-        background: 'rgba(5,14,23,0.8)',
+        background: 'rgba(18,14,22,0.8)',
         padding: '10px 14px',
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 13, color: 'rgba(240,230,80,0.9)' }}>
+          <h3 style={{ margin: 0, fontSize: 13, color: 'rgba(220,195,90,0.9)' }}>
             {T(lang, 'signalMarkers')}
           </h3>
           <button
@@ -921,7 +921,7 @@ export const WaveformView = ({
           </button>
         </div>
         {markers.length === 0 ? (
-          <div style={{ color: 'rgba(140,155,175,0.5)', fontSize: 12 }}>
+          <div style={{ color: 'rgba(120,105,140,0.5)', fontSize: 12 }}>
             {T(lang, 'signalMarkerHint')}
           </div>
         ) : (
@@ -929,8 +929,8 @@ export const WaveformView = ({
             <tbody>
               {markers.map(m => (
                 <tr key={m.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                  <td style={{ padding: '5px 0', color: 'rgba(240,230,80,0.9)', width: 50 }}>{m.label}</td>
-                  <td style={{ padding: '5px 0', color: 'rgba(200,215,235,0.8)' }}>{formatTime(m.time)}</td>
+                  <td style={{ padding: '5px 0', color: 'rgba(220,195,90,0.9)', width: 50 }}>{m.label}</td>
+                  <td style={{ padding: '5px 0', color: 'rgba(190,178,208,0.8)' }}>{formatTime(m.time)}</td>
                   <td style={{ padding: '5px 0', textAlign: 'right' }}>
                     <button
                       onClick={() => {

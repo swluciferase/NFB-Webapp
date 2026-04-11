@@ -526,7 +526,8 @@ function App() {
           }}>
             {/* Col A: Connect + Impedance (grows) + Instructions (pinned bottom) */}
             <div style={{
-              flex: '0 0 268px',
+              flex: 3,
+              minWidth: 0,
               background: 'var(--bg)',
               overflow: 'hidden',
               padding: '.6rem .55rem',

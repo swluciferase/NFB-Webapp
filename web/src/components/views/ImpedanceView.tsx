@@ -232,18 +232,30 @@ export const ImpedanceView: FC<ImpedanceViewProps> = ({
         })}
       </svg>
 
-      {/* ── Compact legend 2×2 ── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr',
-        gap: '.22rem', marginTop: '.32rem', flexShrink: 0,
-      }}>
-        {legendItems.map(item => (
-          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.6rem' }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
-            <span style={{ color: item.color }}>{item.label}</span>
-            <span style={{ color: 'var(--muted)', marginLeft: 'auto' }}>{item.range}</span>
-          </div>
-        ))}
+      {/* ── Impedance gradient bar legend ── */}
+      <div style={{ marginTop: '.3rem', flexShrink: 0 }}>
+        {/* Gradient bar */}
+        <div style={{
+          height: 6, borderRadius: 3,
+          background: 'linear-gradient(to right, #3fb950, #85e89d 28%, #e3a030 55%, #f85149)',
+          marginBottom: '.2rem',
+          position: 'relative',
+        }}>
+          {/* Tick marks */}
+          {[{ pct: 28, label: '150k' }, { pct: 55, label: '300k' }, { pct: 78, label: '600k' }].map(t => (
+            <div key={t.label} style={{
+              position: 'absolute', left: `${t.pct}%`, top: 0, bottom: 0,
+              width: 1, background: 'rgba(20,16,28,0.6)',
+            }} />
+          ))}
+        </div>
+        {/* Labels row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.52rem', color: 'var(--muted)', letterSpacing: '.04em' }}>
+          <span style={{ color: '#3fb950' }}>0</span>
+          <span style={{ color: '#85e89d' }}>150k</span>
+          <span style={{ color: 'var(--amber)' }}>300k</span>
+          <span style={{ color: 'var(--red)' }}>600k+</span>
+        </div>
       </div>
     </div>
   );

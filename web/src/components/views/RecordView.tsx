@@ -436,36 +436,29 @@ export const RecordView: FC<RecordViewProps> = ({
 
         {/* Target duration + sensitivity row */}
         <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{ fontSize: 12, color: 'rgba(160,180,210,0.75)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+            <label style={{ fontSize: 12, color: 'rgba(160,180,210,0.75)', whiteSpace: 'nowrap', flexShrink: 0 }}>
               {T(lang, 'recordTargetDuration')}:
             </label>
-            <select
-              value={isFinite(qualityConfig.targetDurationSec) ? qualityConfig.targetDurationSec : 'Infinity'}
+            <input
+              type="range"
+              min={0}
+              max={TARGET_DURATION_OPTIONS.length - 1}
+              step={1}
+              value={(() => {
+                const idx = TARGET_DURATION_OPTIONS.findIndex(o => o.value === qualityConfig.targetDurationSec);
+                return idx >= 0 ? idx : 2;
+              })()}
               onChange={e => {
-                const raw = e.target.value;
-                const val = raw === 'Infinity' ? Infinity : Number(raw);
-                onQualityConfigChange({ ...qualityConfig, targetDurationSec: val });
+                const opt = TARGET_DURATION_OPTIONS[Number(e.target.value)];
+                if (opt) onQualityConfigChange({ ...qualityConfig, targetDurationSec: opt.value });
               }}
               disabled={isRecording}
-              style={{
-                background: 'rgba(10,20,35,0.85)',
-                border: '1px solid rgba(93,109,134,0.45)',
-                borderRadius: 6,
-                color: '#cdd6e8',
-                fontSize: 12,
-                padding: '4px 8px',
-                cursor: isRecording ? 'not-allowed' : 'pointer',
-                outline: 'none',
-              }}
-            >
-              {TARGET_DURATION_OPTIONS.map(opt => (
-                <option key={String(opt.value)} value={String(opt.value)}>
-                  {isFinite(opt.value) ? opt.label : T(lang, 'recordDurationManual')}
-                </option>
-              ))}
-            </select>
-            <span style={{ fontSize: 12, color: 'rgba(160,180,210,0.6)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>(S)</span>
+              style={{ flex: 1, cursor: isRecording ? 'not-allowed' : 'pointer', accentColor: '#9888a8' }}
+            />
+            <span style={{ fontSize: 13, color: '#9888a8', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', minWidth: 40, textAlign: 'right', flexShrink: 0 }}>
+              {isFinite(qualityConfig.targetDurationSec) ? `${qualityConfig.targetDurationSec}s` : T(lang, 'recordDurationManual')}
+            </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

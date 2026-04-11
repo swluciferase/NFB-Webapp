@@ -600,20 +600,20 @@ const CardiacCard: FC<{
       )}
 
       {/* Secondary metrics row — always show both */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 6 }}>
+        <div>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>LF/HF</span>
           <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: state.metric === 'lfhf' ? '#f9a02e' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
             {isLive ? state.lfHfRatio.toFixed(2) : '—'}
           </div>
         </div>
-        <div style={{ flex: 1 }}>
+        <div>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>RMSSD</span>
           <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 13, color: 'rgba(200,215,235,0.55)', fontWeight: 600 }}>
             {isLive && state.rmssd > 0 ? `${state.rmssd.toFixed(1)} ms` : '—'}
           </div>
         </div>
-        <div style={{ flex: 1, textAlign: 'right' }}>
+        <div>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>RMSSD-T</span>
           <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: state.metric === 'rmssd-t' ? '#c084fc' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
             {isLive && state.rmssdTscore > 0 ? state.rmssdTscore.toFixed(1) : '—'}
@@ -984,23 +984,23 @@ const BnbColumn: FC<{ bnb: BnbState; onChange: (patch: Partial<BnbState>) => voi
             style={{ ...inputStyle, width: 70, textAlign: 'right' }} />
         )}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8, opacity: bnb.bbFixed ? 0.35 : 1, pointerEvents: bnb.bbFixed ? 'none' : 'auto' }}>
-        <div>
-          <span style={labelStyle}>Min Hz</span>
+      <div style={{ display: 'flex', gap: 0, marginBottom: 8, opacity: bnb.bbFixed ? 0.35 : 1, pointerEvents: bnb.bbFixed ? 'none' : 'auto', background: 'var(--bg-tertiary)', borderRadius: 7, overflow: 'hidden', border: '1px solid var(--border)' }}>
+        <div style={{ flex: 1, padding: '6px 8px', borderRight: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 3 }}>Min Hz</div>
           <input type="number" min={0.5} max={100} step={0.5} value={bnb.bbMinHz}
             onChange={e => onChange({ bbMinHz: parseFloat(e.target.value) || 0.5 })}
-            style={inputStyle} disabled={bnb.bbFixed} />
+            style={{ ...inputStyle, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', padding: '2px 0' }} disabled={bnb.bbFixed} />
         </div>
-        <div>
-          <span style={labelStyle}>Max Hz</span>
+        <div style={{ flex: 1, padding: '6px 8px', borderRight: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 3 }}>Max Hz</div>
           <input type="number" min={0.5} max={100} step={0.5} value={bnb.bbMaxHz}
             onChange={e => onChange({ bbMaxHz: parseFloat(e.target.value) || 1 })}
-            style={inputStyle} disabled={bnb.bbFixed} />
+            style={{ ...inputStyle, width: '100%', textAlign: 'center', background: 'transparent', border: 'none', padding: '2px 0' }} disabled={bnb.bbFixed} />
         </div>
-      </div>
-      <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '7px 10px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{T(lang, 'trainCurrentBeat')}</span>
-        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 16, fontWeight: 700, color: '#58a6ff' }}>{formatHz(bnb.bbCurrentHz)} Hz</span>
+        <div style={{ flex: 1.2, padding: '6px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 3 }}>{T(lang, 'trainCurrentBeat')}</div>
+          <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, fontWeight: 700, color: '#58a6ff', lineHeight: 1 }}>{formatHz(bnb.bbCurrentHz)} Hz</span>
+        </div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
         {BNB_BANDS.map(b => (

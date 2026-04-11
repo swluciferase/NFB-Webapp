@@ -90,7 +90,7 @@ export const ImpedanceView: FC<ImpedanceViewProps> = ({
     background: 'transparent',
     cursor: (isConnected && !isRecording) ? 'pointer' : 'not-allowed',
     fontFamily: 'inherit',
-    fontSize: '.52rem',
+    fontSize: '.68rem',
     letterSpacing: '.08em',
     color: isActive ? 'var(--green)' : 'var(--muted)',
     opacity: (isConnected && !isRecording) ? 1 : 0.4,
@@ -209,7 +209,7 @@ export const ImpedanceView: FC<ImpedanceViewProps> = ({
                 x={pos.cx} y={pos.cy + 1}
                 textAnchor="middle" dominantBaseline="middle"
                 fill={isDim ? 'rgba(150,165,185,0.5)' : color}
-                fontSize="6"
+                fontSize="8"
                 fontFamily="IBM Plex Mono, monospace"
                 fontWeight="700"
               >
@@ -218,10 +218,10 @@ export const ImpedanceView: FC<ImpedanceViewProps> = ({
               {/* Impedance value below node */}
               {result !== undefined && (
                 <text
-                  x={pos.cx} y={pos.cy + 21}
+                  x={pos.cx} y={pos.cy + 22}
                   textAnchor="middle"
-                  fill="rgba(200,220,245,.6)"
-                  fontSize="5"
+                  fill="rgba(200,220,245,.75)"
+                  fontSize="7"
                   fontFamily="IBM Plex Mono, monospace"
                 >
                   {isNoSignal ? 'N/A' : `${kohm!.toFixed(0)}kΩ`}
@@ -252,9 +252,9 @@ export const ImpedanceView: FC<ImpedanceViewProps> = ({
             { color: 'var(--amber)',   label: lang === 'zh' ? '尚可' : 'Fair', range: '<600k' },
             { color: 'var(--red)',     label: lang === 'zh' ? '不良' : 'Poor', range: '≥600k' },
           ].map(item => (
-            <div key={item.label} style={{ background: 'rgba(20,16,28,.4)', borderRadius: 1, padding: '.06rem .12rem', border: `1px solid ${item.color}22`, display: 'flex', alignItems: 'center', gap: '.15rem', overflow: 'hidden' }}>
-              <span style={{ fontSize: '.5rem', color: item.color, fontWeight: 600, lineHeight: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
-              <span style={{ fontSize: '.42rem', color: 'var(--muted)', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.range}</span>
+            <div key={item.label} style={{ background: 'rgba(20,16,28,.4)', borderRadius: 1, padding: '.1rem .14rem', border: `1px solid ${item.color}22`, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, overflow: 'hidden' }}>
+              <span style={{ fontSize: 11, color: item.color, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
+              <span style={{ fontSize: 10, color: 'var(--text)', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.range}</span>
             </div>
           ))}
         </div>

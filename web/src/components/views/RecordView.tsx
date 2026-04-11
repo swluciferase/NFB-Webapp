@@ -398,7 +398,7 @@ export const RecordView: FC<RecordViewProps> = ({
         </div>
         {/* CSV report row */}
         <hr style={{ border: 'none', borderTop: '1px solid rgba(178,168,198,.07)', margin: '.28rem 0' }} />
-        <div style={{ fontSize: '.48rem', color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '.28rem' }}>
+        <div style={{ fontSize: '.58rem', color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '.28rem' }}>
           {T(lang, 'recordFromFile')}
         </div>
         <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
@@ -482,7 +482,7 @@ export const RecordView: FC<RecordViewProps> = ({
             style={{
               padding: '.14rem .48rem', border: `1px solid ${qualityConfig.enabled ? 'rgba(106,170,128,.5)' : 'rgba(94,88,112,.4)'}`,
               borderRadius: 1, background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-              fontSize: '.5rem', letterSpacing: '.1em',
+              fontSize: '.62rem', letterSpacing: '.1em',
               color: qualityConfig.enabled ? 'var(--green)' : 'var(--muted)',
             }}>
             {qualityConfig.enabled ? T(lang, 'recordQualityEnabled') : T(lang, 'recordQualityDisabled')}

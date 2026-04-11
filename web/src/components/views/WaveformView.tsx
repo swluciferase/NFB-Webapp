@@ -21,6 +21,7 @@ export interface WaveformViewProps {
   lang: Lang;
   isRecording: boolean;
   onEventMarker: (marker: { id: string; time: number; label: string }) => void;
+  eventMarkers?: { id: string; time: number; label: string }[];
 }
 
 const CHANNEL_COLORS: [number, number, number, number][] = [
@@ -209,6 +210,7 @@ export const WaveformView = ({
   lang,
   isRecording,
   onEventMarker,
+  eventMarkers,
 }: WaveformViewProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wglpRef = useRef<WebglPlot | null>(null);
@@ -234,6 +236,17 @@ export const WaveformView = ({
   const [markers, setMarkers] = useState<EventMarker[]>([]);
   const markersRef = useRef<EventMarker[]>([]);
   const markerDivsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Restore markers from parent state when component remounts (tab switch)
+  useEffect(() => {
+    if (eventMarkers && eventMarkers.length > 0) {
+      // sweepPos -1 = historical marker: show in list but not on canvas
+      const restored: EventMarker[] = eventMarkers.map(m => ({ ...m, sweepPos: -1, totalSweep: -1 }));
+      markersRef.current = restored;
+      setMarkers(restored);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally only on mount
   const sweepCursorRef = useRef<HTMLDivElement | null>(null);
   const totalSweepRef = useRef<number>(0);
   const lappedMarkersRef = useRef<Set<string>>(new Set());
@@ -481,6 +494,7 @@ export const WaveformView = ({
       // Mark markers as lapped once the sweep cursor has gone past them (full revolution)
       const nowTotal = totalSweepRef.current;
       markersRef.current.forEach(marker => {
+        if (marker.totalSweep < 0) return; // historical, skip
         if (!lappedMarkersRef.current.has(marker.id) &&
             nowTotal - marker.totalSweep >= windowPoints) {
           lappedMarkersRef.current.add(marker.id);
@@ -491,6 +505,8 @@ export const WaveformView = ({
       markersRef.current.forEach(marker => {
         const div = markerDivsRef.current.get(marker.id);
         if (!div) return;
+        // Historical markers (restored after tab switch) have no valid canvas position
+        if (marker.sweepPos < 0) { div.style.opacity = '0'; return; }
         const leftPct = (marker.sweepPos / windowPoints) * 100;
         div.style.left = `${leftPct}%`;
         if (lappedMarkersRef.current.has(marker.id)) {

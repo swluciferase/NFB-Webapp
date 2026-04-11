@@ -32,13 +32,15 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+html { font-size: 17px; }
+
 body {
   background: var(--bg);
   color: var(--text);
   margin: 0; padding: 0;
   font-family: 'IBM Plex Mono', 'PingFang TC', 'Microsoft JhengHei', monospace;
   font-weight: 300;
-  font-size: 13px;
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -118,7 +120,7 @@ select option {
   );
 }
 .nd-card-title {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.10em;
   text-transform: uppercase;

@@ -643,6 +643,7 @@ function App() {
                 lang={lang}
                 isRecording={isRecording}
                 onEventMarker={handleEventMarker}
+                eventMarkers={eventMarkers}
               />
             </div>
             <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', background: 'var(--bg)' }}>

@@ -550,7 +550,7 @@ function App() {
   // Tab switching guards
   const handleTabChange = (tab: TabType) => {
     // All non-home tabs require connection
-    const restricted = ['impedance', 'signal', 'fft', 'record', 'training'] as TabType[];
+    const restricted = ['impedance', 'signal', 'fft', 'record'] as TabType[];
     if (restricted.includes(tab) && !isConnected) return;
     // Impedance blocked during recording
     if (tab === 'impedance' && isRecording) return;
@@ -580,15 +580,13 @@ function App() {
           className="content-area"
           style={activeTab === 'training' ? { overflow: 'hidden', padding: '14px 16px' } : undefined}
         >
-          {/* TrainingView always mounted when connected — keeps background processing alive */}
-          {isConnected && (
-            <TrainingView
-              packets={latestPackets}
-              filterParams={filterParams}
-              hidden={activeTab !== 'training'}
-              lang={lang}
-            />
-          )}
+          {/* TrainingView always mounted — keeps background processing and postMessage listener alive */}
+          <TrainingView
+            packets={isConnected ? latestPackets : undefined}
+            filterParams={filterParams}
+            hidden={activeTab !== 'training'}
+            lang={lang}
+          />
           {activeTab !== 'training' && renderContent()}
         </main>
       </div>

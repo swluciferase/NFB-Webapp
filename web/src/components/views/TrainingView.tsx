@@ -1432,14 +1432,18 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           : 0;
         setTargetAchievementPct(taPct);
 
+        // Compute fresh session stats (don't rely on stale refs for the banner)
+        let freshOverall = overallScoreRef.current;
+        let freshReward  = rewardRateRef.current;
+
         if (sessionRunningRef.current) {
           sessionHistoryRef.current.push(tickFraction);
           const sh = sessionHistoryRef.current;
           const sessionLen = sh.length;
 
           // Overall: mean fraction across entire session × 100%
-          const overallPct = Math.round(sh.reduce((a, b) => a + b, 0) / sessionLen * 100);
-          setOverallScore(overallPct);
+          freshOverall = Math.round(sh.reduce((a, b) => a + b, 0) / sessionLen * 100);
+          setOverallScore(freshOverall);
 
           // Reward Rate: % of complete W-second windows where mean fraction ≥ 50%
           const completeWindows = Math.floor(sessionLen / W);
@@ -1449,25 +1453,29 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
               const slice = sh.slice(wi * W, (wi + 1) * W);
               if (slice.reduce((a, b) => a + b, 0) / slice.length >= 0.5) rewardCount++;
             }
-            setRewardRate(Math.round(rewardCount / completeWindows * 100));
+            freshReward = Math.round(rewardCount / completeWindows * 100);
+            setRewardRate(freshReward);
           }
 
           sendToFeedbackWindowRef.current({ type: 'nfb_status', pct: taPct, duration: sessionDurationRef.current });
         }
+
+        // Fire banner update here — taPct, freshOverall, freshReward are all in scope
+        onSessionTickRef.current?.({
+          running: sessionRunningRef.current,
+          duration: sessionRunningRef.current ? sessionDurationRef.current + 1 : 0,
+          overallScore: freshOverall,
+          rewardRate:   freshReward,
+          targetPct:    taPct,
+        });
+
         return current;
       });
 
-      // Session duration counter + bubble stats to banner
+      // Session duration counter
       if (sessionRunningRef.current) {
         setSessionDuration(d => d + 1);
       }
-      onSessionTickRef.current?.({
-        running: sessionRunningRef.current,
-        duration: sessionRunningRef.current ? sessionDurationRef.current + 1 : 0,
-        overallScore: overallScoreRef.current,
-        rewardRate: rewardRateRef.current,
-        targetPct: taPct,
-      });
     }, 1000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps

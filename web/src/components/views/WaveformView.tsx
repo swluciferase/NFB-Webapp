@@ -144,9 +144,9 @@ function applyBiquad(
 
 // Apply full filter chain to one sample of one channel
 // Returns filtered sample. Uses shared FilterBiquadState refs.
-// ADC saturation threshold (95% of full scale)
-const ADC_FULL_SCALE_UV = 3000; // µV — typical STEEG device full-scale input
-const SAT_THRESH_UV = ADC_FULL_SCALE_UV * 0.95; // 2850 µV
+// ADC saturation threshold: ADS1299, VREF=4.5V, PGA Gain=12
+// Full scale = 4,500,000 / 12 = 375,000 µV; 95% safety margin = 356,250 µV
+const SAT_THRESH_UV = 356_250;
 
 function applyFilterChain(
   x: number,

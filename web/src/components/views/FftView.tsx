@@ -104,7 +104,7 @@ function applyFilterChain(
 ): number {
   let s = x;
   // ① Saturation gate
-  const SAT_THRESH_UV = 3000 * 0.95;
+  const SAT_THRESH_UV = 356_250; // ADS1299: VREF=4.5V, Gain=12 → 375,000 µV × 95%
   if (Math.abs(s) > SAT_THRESH_UV) {
     s = biquad.lastValidSample[ch] ?? 0;
   } else {

@@ -342,17 +342,15 @@ const EegCard: FC<{
         )}
       </div>
 
-      {/* Channel + Band selectors (custom only) */}
-      {!activePreset && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-          <select value={indicator.channel} onChange={e => onChannelChange(indicator.id, e.target.value as Channel)} style={selectStyle}>
-            {CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
-          </select>
-          <select value={indicator.band} onChange={e => onBandChange(indicator.id, e.target.value as Band)} style={selectStyle}>
-            {BANDS.map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
-        </div>
-      )}
+      {/* Channel + Band selectors — always visible; dimmed when a preset overrides */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, opacity: activePreset ? 0.35 : 1, pointerEvents: activePreset ? 'none' : 'auto' }}>
+        <select value={indicator.channel} onChange={e => onChannelChange(indicator.id, e.target.value as Channel)} style={selectStyle}>
+          {CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+        </select>
+        <select value={indicator.band} onChange={e => onBandChange(indicator.id, e.target.value as Band)} style={selectStyle}>
+          {BANDS.map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
+      </div>
 
       {/* Direction */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -594,18 +592,18 @@ const CardiacCard: FC<{
         })}
       </div>
 
-      {/* All HRV metrics — compact single row, 5 cells, single-line each */}
+      {/* All HRV metrics — 5 compact cells */}
       <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
         {[
-          { label: 'HR', value: isLive && liveHr !== null ? `${liveHr}bpm` : '—', color: 'var(--rose)' },
-          { label: T(lang, 'trainBreathing'), value: isLive && liveBreathing !== null ? `${liveBreathing}/m` : '—', color: 'var(--teal)' },
+          { label: 'HR', value: isLive && liveHr !== null ? `${liveHr} bpm` : '—', color: 'var(--rose)' },
+          { label: T(lang, 'trainBreathing'), value: isLive && liveBreathing !== null ? `${liveBreathing}/min` : '—', color: 'var(--teal)' },
           { label: 'LF/HF', value: isLive ? state.lfHfRatio.toFixed(2) : '—', color: state.metric === 'lfhf' ? '#f9a02e' : 'var(--muted)' },
-          { label: 'RMSSD', value: isLive && state.rmssd > 0 ? `${state.rmssd.toFixed(0)}ms` : '—', color: 'rgba(200,215,235,.55)' },
-          { label: 'T', value: isLive && state.rmssdTscore > 0 ? state.rmssdTscore.toFixed(0) : '—', color: state.metric === 'rmssd-t' ? '#c084fc' : 'var(--muted)' },
+          { label: 'RMSSD', value: isLive && state.rmssd > 0 ? `${state.rmssd.toFixed(1)}ms` : '—', color: 'var(--cream)' },
+          { label: 'RMSSD-T', value: isLive && state.rmssdTscore > 0 ? state.rmssdTscore.toFixed(1) : '—', color: state.metric === 'rmssd-t' ? '#c084fc' : 'var(--muted)' },
         ].map(item => (
-          <div key={item.label} style={{ flex: 1, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.1rem .18rem', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '.18rem' }}>
-            <span style={{ fontSize: '.4rem', color: 'var(--text)', letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, whiteSpace: 'nowrap', flexShrink: 0 }}>{item.label}</span>
-            <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: '.6rem', color: item.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1, whiteSpace: 'nowrap' }}>{item.value}</span>
+          <div key={item.label} style={{ flex: 1, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.16rem .2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+            <div style={{ fontSize: 9, color: 'var(--text)', letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1.3, whiteSpace: 'nowrap' }}>{item.label}</div>
+            <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 11, color: item.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2, whiteSpace: 'nowrap', fontWeight: 600 }}>{item.value}</div>
           </div>
         ))}
       </div>
@@ -1727,8 +1725,8 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
                 { label: T(lang ?? 'zh', 'trainOO'), value: `${overlayOpacity}%` },
               ].map(item => (
                 <div key={item.label} style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '7px 10px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>{item.label}</div>
-                  <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, fontWeight: 600, color: '#dce9f8' }}>{item.value}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text)', marginBottom: 2, letterSpacing: '.04em' }}>{item.label}</div>
+                  <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 15, fontWeight: 700, color: '#dce9f8' }}>{item.value}</div>
                 </div>
               ))}
             </div>
@@ -1736,32 +1734,32 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           {/* 活躍度 slider */}
           <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '8px 10px', marginBottom: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{T(lang ?? 'zh', 'trainActivityLevel')}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#f9a02e', fontFamily: 'ui-monospace,monospace' }}>
+              <span style={{ fontSize: 12, color: 'var(--cream)', fontWeight: 600, letterSpacing: '0.04em' }}>{T(lang ?? 'zh', 'trainActivityLevel')}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#f9a02e', fontFamily: 'ui-monospace,monospace' }}>
                 Lv.{difficultyLevel} {DIFFICULTY_LABELS[lang ?? 'zh'][difficultyLevel - 1]} &nbsp;
-                <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>TA={[36,49,62,75,88][difficultyLevel - 1]}%</span>
+                <span style={{ color: 'var(--text)', fontWeight: 400 }}>TA={[36,49,62,75,88][difficultyLevel - 1]}%</span>
               </span>
             </div>
             <input type="range" min={1} max={5} step={1} value={difficultyLevel}
               onChange={e => setDifficultyLevel(parseInt(e.target.value))}
               style={{ width: '100%', accentColor: '#f9a02e' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
               <span>{T(lang ?? 'zh', 'trainEasiest')}</span><span>{T(lang ?? 'zh', 'trainHardest')}</span>
             </div>
           </div>
           {/* 持續度 slider */}
           <div style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '8px 10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{T(lang ?? 'zh', 'trainPersistLevel')}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#85e89d', fontFamily: 'ui-monospace,monospace' }}>
+              <span style={{ fontSize: 12, color: 'var(--cream)', fontWeight: 600, letterSpacing: '0.04em' }}>{T(lang ?? 'zh', 'trainPersistLevel')}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#85e89d', fontFamily: 'ui-monospace,monospace' }}>
                 Lv.{persistenceLevel} {PERSISTENCE_LABELS[lang ?? 'zh'][persistenceLevel - 1]} &nbsp;
-                <span style={{ color: 'rgba(200,215,240,0.5)', fontWeight: 400 }}>window</span>
+                <span style={{ color: 'var(--text)', fontWeight: 400 }}>window</span>
               </span>
             </div>
             <input type="range" min={1} max={5} step={1} value={persistenceLevel}
               onChange={e => setPersistenceLevel(parseInt(e.target.value))}
               style={{ width: '100%', accentColor: '#85e89d' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'rgba(93,109,134,0.6)', marginTop: 2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
               <span>{`${T(lang ?? 'zh', 'trainEasiest')} (5s)`}</span><span>{`${T(lang ?? 'zh', 'trainHardest')} (23s)`}</span>
             </div>
           </div>
@@ -1769,10 +1767,10 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
             {(['and', 'average'] as const).map(m => (
               <button key={m} onClick={() => setTaMode(m)} style={{
-                flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 border: `1px solid ${taMode === m ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`,
                 background: taMode === m ? 'rgba(88,166,255,0.15)' : 'var(--bg-secondary)',
-                color: taMode === m ? '#58a6ff' : 'var(--text-secondary)',
+                color: taMode === m ? '#58a6ff' : 'var(--text)',
               }}>
                 {m === 'and' ? T(lang ?? 'zh', 'trainAllOrNone') : T(lang ?? 'zh', 'trainAverage')}
               </button>
@@ -1782,7 +1780,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
         {/* Active indicators list */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>{T(lang ?? 'zh', 'trainActiveInd')}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', marginBottom: 8 }}>{T(lang ?? 'zh', 'trainActiveInd')}</div>
           {enabledIndicators.length === 0 && (
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', padding: '8px 0' }}>{T(lang ?? 'zh', 'trainNoActiveInd')}</div>
           )}

@@ -68,16 +68,16 @@ function computeButterLP(f0: number, fs: number, q: number) {
   };
 }
 
-const NOTCH_Q = 35;
-function computeDualNotch(fs: number) {
-  const makeCoeff = (f0: number) => {
-    const w0 = 2 * Math.PI * f0 / fs;
-    const alpha = Math.sin(w0) / (2 * NOTCH_Q);
-    const cosW = Math.cos(w0);
-    const a0 = 1 + alpha;
-    return { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
-  };
-  return { c50: makeCoeff(50), c60: makeCoeff(60) };
+// Bandstop 42–65 Hz: f₀=√(42×65)≈52.25 Hz, Q=f₀/BW≈2.27
+function computeBandstop(fs: number) {
+  const fLow = 42, fHigh = 65;
+  const f0 = Math.sqrt(fLow * fHigh);
+  const q  = f0 / (fHigh - fLow);
+  const w0 = 2 * Math.PI * f0 / fs;
+  const alpha = Math.sin(w0) / (2 * q);
+  const cosW  = Math.cos(w0);
+  const a0    = 1 + alpha;
+  return { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
 }
 
 function applyBiquad(
@@ -99,7 +99,7 @@ function applyFilterChain(
   params: FilterParams,
   hpCoeffs: ReturnType<typeof computeButterHP>[],
   lpCoeffs: ReturnType<typeof computeButterLP>[],
-  notchCoeffs: ReturnType<typeof computeDualNotch>,
+  notchCoeffs: ReturnType<typeof computeBandstop>,
 ): number {
   let s = x;
   const dcAlpha = 0.9985;
@@ -117,9 +117,8 @@ function applyFilterChain(
   }
 
   if (params.notchFreq !== 0) {
-    const { c50, c60 } = notchCoeffs;
-    s = applyBiquad(s, biquad.notchState, ch * 6,     c50.b0, c50.b1, c50.b2, c50.a1, c50.a2);
-    s = applyBiquad(s, biquad.notchState, ch * 6 + 2, c60.b0, c60.b1, c60.b2, c60.a1, c60.a2);
+    // Bandstop 42–65 Hz (single stage, uses ch*6+0/1)
+    s = applyBiquad(s, biquad.notchState, ch * 6, notchCoeffs.b0, notchCoeffs.b1, notchCoeffs.b2, notchCoeffs.a1, notchCoeffs.a2);
   }
 
   return s;
@@ -303,7 +302,7 @@ export const FftView = ({
       compute1stOrderLP(filterParams.lpFreq, SAMPLE_RATE_HZ),
       computeButterLP(filterParams.lpFreq, SAMPLE_RATE_HZ, 1.0),
     ],
-    notch: computeDualNotch(SAMPLE_RATE_HZ),
+    notch: computeBandstop(SAMPLE_RATE_HZ),
   }), [filterParams.hpFreq, filterParams.lpFreq]);
 
   const filterCoeffsRef = useRef(filterCoeffs);

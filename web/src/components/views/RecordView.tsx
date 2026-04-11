@@ -36,6 +36,8 @@ export interface RecordViewProps {
   goodTimeSec: number;
   goodPercent: number;
   shouldAutoStop: boolean;
+  /** When 'split', render as two side-by-side columns (B=settings, C=controls) for CI page */
+  layout?: 'split';
 }
 
 function formatDuration(ms: number): string {
@@ -92,6 +94,7 @@ export const RecordView: FC<RecordViewProps> = ({
   goodTimeSec,
   goodPercent,
   shouldAutoStop,
+  layout,
 }) => {
   const [elapsed, setElapsed] = useState(0);
   const [reportStatus, setReportStatus] = useState<'idle' | 'analyzing' | 'done' | 'error'>('idle');
@@ -294,92 +297,91 @@ export const RecordView: FC<RecordViewProps> = ({
     onEventMarker({ id, time, label });
   };
 
+
+
+  // ── column style shared across both split-layout cols ──
+  const colStyle: CSSProperties = {
+    background: 'var(--bg)',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    padding: '.6rem .55rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 0,
+  };
+
+  // ── card / input shared styles ──
+  const cardStyle: CSSProperties = {
+    background: 'var(--bg2)',
+    border: '1px solid var(--border)',
+    borderRadius: 2,
+    padding: '.6rem .65rem',
+    marginBottom: '.4rem',
+    flexShrink: 0,
+  };
   const inputStyle: CSSProperties = {
-    background: 'rgba(10,20,35,0.85)',
-    border: '1px solid rgba(93,109,134,0.45)',
-    borderRadius: 7,
-    color: '#cdd6e8',
-    fontSize: 14,
-    padding: '9px 12px',
+    background: 'var(--bg4)',
+    border: '1px solid var(--dim)',
+    borderRadius: 1,
+    color: 'var(--cream)',
+    fontSize: '.72rem',
+    padding: '.25rem .38rem',
     width: '100%',
     outline: 'none',
-    boxSizing: 'border-box',
     fontFamily: 'inherit',
   };
-
-  const labelStyle: CSSProperties = {
+  const lblStyle: CSSProperties = {
+    fontSize: '.68rem',
+    color: 'var(--text)',
+    marginBottom: '.2rem',
+    letterSpacing: '.04em',
     display: 'block',
-    color: 'rgba(160,180,210,0.8)',
-    fontSize: 13,
-    marginBottom: 5,
-    fontWeight: 500,
   };
+  const stitle = (glyph: string, text: string) => (
+    <div style={{
+      fontSize: '.6rem', letterSpacing: '.15em', textTransform: 'uppercase',
+      color: 'var(--cream)', marginBottom: '.44rem',
+      paddingBottom: '.24rem', borderBottom: '1px solid rgba(178,168,198,.1)',
+      display: 'flex', alignItems: 'center', gap: '.32rem', flexShrink: 0,
+    }}>
+      <span style={{ fontFamily: "'Crimson Pro','Georgia',serif", fontStyle: 'italic', fontSize: '.88rem', color: 'var(--plum)', lineHeight: 1 }}>{glyph}</span>
+      <span>{text}</span>
+    </div>
+  );
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+  // ════════════════════════════════════════
+  // SETTINGS SECTION (Col B in split mode)
+  // ════════════════════════════════════════
+  const settingsSection = (
+    <>
+      {stitle('∫', T(lang, 'recordTitle'))}
 
-      {/* Subject info form */}
-      <div style={{
-        background: 'rgba(8,17,30,0.85)',
-        border: '1px solid rgba(93,109,134,0.3)',
-        borderRadius: 14,
-        padding: '20px 24px',
-      }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: '0.95rem', fontWeight: 600, color: 'rgba(180,200,230,0.85)' }}>
-          {T(lang, 'recordTitle')}
-        </h3>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          {/* Subject ID */}
+      {/* Subject info card */}
+      <div style={cardStyle}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.32rem', marginBottom: '.32rem' }}>
           <div>
-            <label style={labelStyle}>{T(lang, 'recordSubjectId')}</label>
-            <input
-              type="text"
-              value={subjectInfo.id}
+            <label style={lblStyle}>{T(lang, 'recordSubjectId')}</label>
+            <input type="text" value={subjectInfo.id}
               onChange={e => onSubjectInfoChange({ ...subjectInfo, id: e.target.value })}
-              disabled={isRecording}
-              style={inputStyle}
-              placeholder="e.g. S001"
-            />
+              disabled={isRecording} style={inputStyle} placeholder="S-001" />
           </div>
-
-          {/* Name */}
           <div>
-            <label style={labelStyle}>{T(lang, 'recordSubjectName')}</label>
-            <input
-              type="text"
-              value={subjectInfo.name}
+            <label style={lblStyle}>{T(lang, 'recordSubjectName')}</label>
+            <input type="text" value={subjectInfo.name}
               onChange={e => onSubjectInfoChange({ ...subjectInfo, name: e.target.value })}
-              disabled={isRecording}
-              style={inputStyle}
-            />
+              disabled={isRecording} style={inputStyle} />
           </div>
-
-          {/* Date of birth */}
           <div>
-            <label style={labelStyle}>{T(lang, 'recordDob')}</label>
-            <input
-              type="date"
-              lang="en"
-              value={subjectInfo.dob}
+            <label style={lblStyle}>{T(lang, 'recordDob')}</label>
+            <input type="date" lang="en" value={subjectInfo.dob}
               onChange={e => onSubjectInfoChange({ ...subjectInfo, dob: e.target.value })}
-              disabled={isRecording}
-              style={inputStyle}
-            />
+              disabled={isRecording} style={inputStyle} />
           </div>
-
-          {/* Sex */}
           <div>
-            <label style={labelStyle}>{T(lang, 'recordSex')}</label>
-            <select
-              value={subjectInfo.sex}
-              onChange={e => onSubjectInfoChange({
-                ...subjectInfo,
-                sex: e.target.value as SubjectInfo['sex'],
-              })}
-              disabled={isRecording}
-              style={{ ...inputStyle, cursor: 'pointer' }}
-            >
+            <label style={lblStyle}>{T(lang, 'recordSex')}</label>
+            <select value={subjectInfo.sex}
+              onChange={e => onSubjectInfoChange({ ...subjectInfo, sex: e.target.value as SubjectInfo['sex'] })}
+              disabled={isRecording} style={{ ...inputStyle, cursor: 'pointer' }}>
               <option value="">--</option>
               <option value="M">{T(lang, 'recordSexMale')}</option>
               <option value="F">{T(lang, 'recordSexFemale')}</option>
@@ -387,561 +389,405 @@ export const RecordView: FC<RecordViewProps> = ({
             </select>
           </div>
         </div>
-
-        {/* Notes */}
-        <div style={{ marginTop: 14 }}>
-          <label style={labelStyle}>{T(lang, 'recordNotes')}</label>
-          <textarea
-            value={subjectInfo.notes}
+        <div>
+          <label style={lblStyle}>{T(lang, 'recordNotes')}</label>
+          <textarea value={subjectInfo.notes}
             onChange={e => onSubjectInfoChange({ ...subjectInfo, notes: e.target.value })}
-            disabled={isRecording}
-            rows={2}
-            style={{ ...inputStyle, resize: 'vertical', minHeight: 52 }}
-          />
+            disabled={isRecording} rows={2}
+            style={{ ...inputStyle, resize: 'vertical', minHeight: 44, lineHeight: 1.55 }} />
         </div>
+        {/* CSV report row */}
+        <hr style={{ border: 'none', borderTop: '1px solid rgba(178,168,198,.07)', margin: '.28rem 0' }} />
+        <div style={{ fontSize: '.48rem', color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '.28rem' }}>
+          {T(lang, 'recordFromFile')}
+        </div>
+        <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
+          <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileReport(f); e.target.value = ''; }} />
+          <div style={{
+            flex: 1, padding: '.22rem .4rem', border: '1px dashed var(--dim)', borderRadius: 1,
+            fontSize: '.56rem', color: 'var(--muted)', cursor: 'pointer',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+            onClick={() => fileInputRef.current?.click()}>
+            {T(lang, 'recordFromFileParsing') === fileStatusMsg && fileStatus === 'parsing'
+              ? T(lang, 'recordFromFileParsing')
+              : T(lang, 'recordFromFile')}
+          </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={fileStatus === 'parsing' || fileStatus === 'analyzing'}
+            style={{
+              padding: '.22rem .55rem', border: '1px solid var(--border)', borderRadius: 1,
+              background: 'transparent', color: 'var(--mauve)', fontSize: '.54rem',
+              cursor: (fileStatus === 'parsing' || fileStatus === 'analyzing') ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', whiteSpace: 'nowrap', letterSpacing: '.04em',
+              opacity: (fileStatus === 'parsing' || fileStatus === 'analyzing') ? 0.5 : 1,
+            }}>
+            {fileStatus === 'analyzing' ? '…' : T(lang, 'recordFromFile').split('').slice(0, 4).join('')}
+          </button>
+        </div>
+        {fileStatus !== 'idle' && (
+          <div style={{ fontSize: '.54rem', marginTop: '.2rem', color: fileStatus === 'done' ? 'var(--green)' : fileStatus === 'error' ? 'var(--red)' : 'var(--muted)' }}>
+            {fileStatus === 'done' ? `✓ ${fileStatusMsg}` : fileStatus === 'error' ? `✗ ${fileStatusMsg}` : fileStatusMsg || '…'}
+          </div>
+        )}
       </div>
 
-      {/* Quality monitor card */}
-      <div style={{
-        background: 'rgba(8,17,30,0.85)',
-        border: '1px solid rgba(93,109,134,0.3)',
-        borderRadius: 14,
-        padding: '18px 24px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: qualityConfig.enabled ? 14 : 0 }}>
-          <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 600, color: 'rgba(180,200,230,0.85)' }}>
-            {T(lang, 'recordQualityGrid')}
-          </h3>
-          {/* Toggle */}
-          <button
-            onClick={() => onQualityConfigChange({ ...qualityConfig, enabled: !qualityConfig.enabled })}
+      {/* Filter · VisioMynd card */}
+      <div style={cardStyle}>
+        {stitle('⌗', lang === 'zh' ? '濾波 · VisioMynd' : 'Filter · VisioMynd')}
+        <div style={{ display: 'flex', gap: 3, marginBottom: '.32rem' }}>
+          {[
+            { l: T(lang, 'signalBandpass'), v: filterDesc, c: 'var(--teal)' },
+            { l: T(lang, 'signalNotch'),    v: notchDesc,  c: 'var(--amber)' },
+            { l: T(lang, 'recordArtifactRemoval'), v: useArtifactRemoval ? 'On' : 'Off', c: useArtifactRemoval ? 'var(--green)' : 'var(--muted)' },
+          ].map(({ l, v, c }) => (
+            <div key={l} style={{ flex: 1, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.3rem .38rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '.54rem', color: 'var(--text)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '.14rem' }}>{l}</div>
+              <div style={{ fontSize: '.66rem', color: c }}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.42rem', marginBottom: '.3rem' }}>
+          <div style={{
+            width: 25, height: 12, background: enableRppg ? 'rgba(152,136,168,.3)' : 'rgba(255,255,255,.05)',
+            borderRadius: 6, border: `1px solid ${enableRppg ? 'rgba(152,136,168,.3)' : 'var(--border)'}`,
+            position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background .2s',
+          }} onClick={() => { if (!isRecording) setEnableRppg(e => !e); }}>
+            <div style={{
+              position: 'absolute', width: 6, height: 6, borderRadius: '50%',
+              background: enableRppg ? 'var(--mauve)' : 'var(--muted)',
+              top: 2, left: enableRppg ? 15 : 2, transition: 'left .18s, background .18s',
+            }} />
+          </div>
+          <span style={{ fontSize: '.7rem', color: 'var(--cream)' }}>{lang === 'zh' ? '同步 VisioMynd 心率結果至報告' : 'Include VisioMynd HRV in report'}</span>
+        </div>
+        <button onClick={openVisioMynd} style={{
+          width: '100%', padding: '.28rem 0', border: '1px solid var(--border)', borderRadius: 1,
+          background: 'transparent', color: 'var(--mauve)', fontSize: '.58rem', cursor: 'pointer',
+          fontFamily: 'inherit', letterSpacing: '.04em',
+        }}>
+          {lang === 'zh' ? '↗ 開啟 VisioMynd（帶入受試者資訊）' : '↗ Open VisioMynd (pre-fill subject)'}
+        </button>
+      </div>
+
+      {/* Recording settings card (CCA + target duration + sensitivity) */}
+      <div style={cardStyle}>
+        {stitle('⌾', T(lang, 'recordQualityGrid'))}
+        {/* Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: qualityConfig.enabled ? '.36rem' : 0 }}>
+          <div style={{ fontSize: '.6rem', color: 'var(--cream)', letterSpacing: '.04em' }}>{lang === 'zh' ? '品質監控' : 'Quality Monitor'}</div>
+          <button onClick={() => onQualityConfigChange({ ...qualityConfig, enabled: !qualityConfig.enabled })}
             style={{
-              background: qualityConfig.enabled ? 'rgba(63,185,80,0.15)' : 'rgba(30,50,80,0.4)',
-              border: `1px solid ${qualityConfig.enabled ? 'rgba(63,185,80,0.5)' : 'rgba(93,109,134,0.4)'}`,
-              borderRadius: 6,
-              color: qualityConfig.enabled ? '#3fb950' : 'rgba(130,155,185,0.6)',
-              fontSize: 12,
-              fontWeight: 600,
-              padding: '4px 12px',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              minWidth: 52,
-            }}
-          >
+              padding: '.14rem .48rem', border: `1px solid ${qualityConfig.enabled ? 'rgba(106,170,128,.5)' : 'rgba(94,88,112,.4)'}`,
+              borderRadius: 1, background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: '.5rem', letterSpacing: '.1em',
+              color: qualityConfig.enabled ? 'var(--green)' : 'var(--muted)',
+            }}>
             {qualityConfig.enabled ? T(lang, 'recordQualityEnabled') : T(lang, 'recordQualityDisabled')}
           </button>
         </div>
 
         {qualityConfig.enabled && (<>
-
-        {/* Target duration + sensitivity row */}
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
-            <label style={{ fontSize: 12, color: 'rgba(160,180,210,0.75)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {T(lang, 'recordTargetDuration')}:
+          {/* Row: Target duration + CCA on same row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.34rem' }}>
+            <label style={{ ...lblStyle, margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {T(lang, 'recordTargetDuration')}
             </label>
-            <input
-              type="range"
-              min={0}
-              max={TARGET_DURATION_OPTIONS.length - 1}
-              step={1}
-              value={(() => {
-                const idx = TARGET_DURATION_OPTIONS.findIndex(o => o.value === qualityConfig.targetDurationSec);
-                return idx >= 0 ? idx : 2;
-              })()}
-              onChange={e => {
-                const opt = TARGET_DURATION_OPTIONS[Number(e.target.value)];
-                if (opt) onQualityConfigChange({ ...qualityConfig, targetDurationSec: opt.value });
-              }}
-              disabled={isRecording}
-              style={{ flex: 1, cursor: isRecording ? 'not-allowed' : 'pointer', accentColor: '#9888a8' }}
-            />
-            <span style={{ fontSize: 13, color: '#9888a8', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', minWidth: 40, textAlign: 'right', flexShrink: 0 }}>
+            <input type="range" min={0} max={TARGET_DURATION_OPTIONS.length - 1} step={1}
+              value={(() => { const i = TARGET_DURATION_OPTIONS.findIndex(o => o.value === qualityConfig.targetDurationSec); return i >= 0 ? i : 2; })()}
+              onChange={e => { const o = TARGET_DURATION_OPTIONS[Number(e.target.value)]; if (o) onQualityConfigChange({ ...qualityConfig, targetDurationSec: o.value }); }}
+              disabled={isRecording} style={{ flex: 1, cursor: isRecording ? 'not-allowed' : 'pointer', accentColor: 'var(--mauve)' }} />
+            <span style={{ fontSize: '.72rem', color: 'var(--mauve)', minWidth: 36, textAlign: 'right', flexShrink: 0 }}>
               {isFinite(qualityConfig.targetDurationSec) ? `${qualityConfig.targetDurationSec}s` : T(lang, 'recordDurationManual')}
             </span>
+            <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0 }} />
+            {/* CCA toggle on same row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.38rem', flexShrink: 0 }}>
+              <div style={{
+                width: 25, height: 12, background: useArtifactRemoval ? 'rgba(152,136,168,.3)' : 'rgba(255,255,255,.05)',
+                borderRadius: 6, border: `1px solid ${useArtifactRemoval ? 'rgba(152,136,168,.3)' : 'var(--border)'}`,
+                position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background .2s',
+              }} onClick={() => setUseArtifactRemoval(v => !v)}>
+                <div style={{
+                  position: 'absolute', width: 6, height: 6, borderRadius: '50%',
+                  background: useArtifactRemoval ? 'var(--mauve)' : 'var(--muted)',
+                  top: 2, left: useArtifactRemoval ? 15 : 2, transition: 'left .18s, background .18s',
+                }} />
+              </div>
+              <span style={{ fontSize: '.7rem', color: 'var(--cream)', whiteSpace: 'nowrap' }}>
+                {lang === 'zh' ? '去雜訊 CCA' : 'CCA'}
+              </span>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{ fontSize: 12, color: 'rgba(160,180,210,0.75)' }}>
-              {T(lang, 'recordSensitivity')}:
+          {/* Row: Sensitivity */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.38rem', marginBottom: '.36rem' }}>
+            <label style={{ ...lblStyle, margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {T(lang, 'recordSensitivity')}
             </label>
-            <div style={{ display: 'flex', gap: 4 }}>
+            <div style={{ display: 'flex', gap: '.2rem', flex: 1 }}>
               {([1, 2, 3, 4, 5] as const).map(level => (
-                <button
-                  key={level}
+                <button key={level}
                   onClick={() => onQualityConfigChange({ ...qualityConfig, sensitivity: level })}
                   style={{
-                    width: 28, height: 28,
-                    borderRadius: 5,
-                    border: `1px solid ${qualityConfig.sensitivity === level ? 'rgba(88,166,255,0.7)' : 'rgba(93,109,134,0.4)'}`,
-                    background: qualityConfig.sensitivity === level ? 'rgba(88,166,255,0.2)' : 'transparent',
-                    color: qualityConfig.sensitivity === level ? '#8ecfff' : 'rgba(160,180,210,0.6)',
-                    fontSize: 12, fontWeight: 600,
+                    flex: 1, padding: '.22rem 0', fontSize: '.64rem', fontWeight: 600,
+                    border: `1px solid ${qualityConfig.sensitivity === level ? 'rgba(152,136,168,.5)' : 'var(--border)'}`,
+                    borderRadius: 1,
+                    background: qualityConfig.sensitivity === level ? 'rgba(152,136,168,.08)' : 'transparent',
+                    color: qualityConfig.sensitivity === level ? 'var(--mauve)' : 'var(--text)',
                     cursor: 'pointer',
-                  }}
-                >
+                  }}>
                   {level}
                 </button>
               ))}
             </div>
-            <span style={{ fontSize: 11, color: 'rgba(130,155,185,0.55)' }}>
+            <span style={{ fontSize: '.56rem', color: 'var(--muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
               {T(lang, 'recordSensitivityLenient')} → {T(lang, 'recordSensitivityStrict')}
             </span>
           </div>
-        </div>
 
-        {/* 8-channel STD grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(8, 1fr)',
-          gap: 6,
-          marginBottom: 14,
-        }}>
-          {Array.from({ length: CHANNEL_COUNT }, (_, ch) => {
-            const std = currentWindowStds[ch] ?? 0;
-            const thresholds = [200, 150, 100, 60, 30];
-            const threshold = thresholds[(qualityConfig.sensitivity - 1)] ?? 100;
-            const color = std < threshold
-              ? '#3fb950'
-              : std < threshold * 1.5
-                ? '#e3a030'
-                : '#f85149';
-            return (
-              <div key={ch} style={{
-                padding: '6px 4px',
-                background: `${color}12`,
-                border: `1px solid ${color}44`,
-                borderRadius: 6,
-                textAlign: 'center',
-              }}>
-                <div style={{
-                  fontSize: 10, fontWeight: 700,
-                  color: 'rgba(160,180,210,0.7)',
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  marginBottom: 2,
-                }}>
-                  {CHANNEL_LABELS[ch]}
-                </div>
-                <div style={{
-                  fontSize: 11, fontWeight: 700,
-                  color,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                }}>
-                  {isRecording ? `${std.toFixed(0)}` : '--'}
-                </div>
+          {/* Stats row */}
+          <div style={{ display: 'flex', gap: 3, marginBottom: '.36rem' }}>
+            {[
+              { l: lang === 'zh' ? '時長' : 'Dur', v: isRecording ? (() => { const s = Math.floor((Date.now() - (startTime?.getTime() ?? Date.now())) / 1000); return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`; })() : '--:--' },
+              { l: lang === 'zh' ? '樣本' : 'Samp', v: recordedSamples.length > 999 ? `${Math.floor(recordedSamples.length/1000)}k` : (recordedSamples.length > 0 ? String(recordedSamples.length) : '--'), c: 'var(--teal)' },
+              { l: lang === 'zh' ? '有效' : 'Good', v: isRecording ? `${Math.floor(goodTimeSec/60).toString().padStart(2,'0')}:${Math.floor(goodTimeSec%60).toString().padStart(2,'0')}` : '--:--', c: 'var(--green)' },
+              { l: lang === 'zh' ? '品質%' : 'Qual%', v: isRecording ? `${goodPercent}%` : '--', c: goodPercent >= 80 ? 'var(--green)' : goodPercent >= 50 ? 'var(--amber)' : 'var(--text)' },
+            ].map(({ l, v, c }) => (
+              <div key={l} style={{ flex: 1, background: 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 1, padding: '.3rem .34rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '.54rem', color: 'var(--text)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '.12rem' }}>{l}</div>
+                <div style={{ fontSize: '.78rem', color: c ?? 'var(--cream)' }}>{v}</div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
 
-        {/* Progress bar (only during recording) */}
-        {isRecording && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: 'rgba(160,180,210,0.75)' }}>
-                {T(lang, 'recordGoodTime')}: <span style={{ color: '#3fb950', fontWeight: 700 }}>{formatGoodTime(goodTimeSec)}</span>
-                {isFinite(qualityConfig.targetDurationSec) && (
-                  <span style={{ color: 'rgba(130,155,185,0.6)' }}>
-                    {' '}/ {formatGoodTime(qualityConfig.targetDurationSec)} ({T(lang, 'recordTargetDuration')})
-                  </span>
-                )}
-              </span>
-              <span style={{ fontSize: 12, color: '#7ec8f5', fontWeight: 700 }}>
-                {T(lang, 'recordQualityPct')}: {goodPercent}%
-              </span>
-            </div>
-            {isFinite(qualityConfig.targetDurationSec) && (
-              <div style={{
-                height: 6,
-                background: 'rgba(30,50,80,0.7)',
-                borderRadius: 3,
-                overflow: 'hidden',
-                border: '1px solid rgba(93,109,134,0.3)',
-              }}>
+          {/* 8-channel quality grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3, marginBottom: '.36rem' }}>
+            {Array.from({ length: CHANNEL_COUNT }, (_, ch) => {
+              const std = currentWindowStds[ch] ?? 0;
+              const thresholds = [200, 150, 100, 60, 30];
+              const threshold = thresholds[(qualityConfig.sensitivity - 1)] ?? 100;
+              const color = std < threshold ? 'var(--green)' : std < threshold * 1.5 ? 'var(--amber)' : 'var(--red)';
+              return (
+                <div key={ch} style={{
+                  background: 'var(--bg4)', border: `1px solid ${color}44`,
+                  borderRadius: 1, padding: '.28rem .3rem', textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: '.58rem', color: 'var(--text)', marginBottom: '.1rem' }}>{CHANNEL_LABELS[ch]}</div>
+                  <div style={{ fontSize: '.64rem', color, fontVariantNumeric: 'tabular-nums' }}>
+                    {isRecording ? std.toFixed(0) : '--'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Progress bar */}
+          {isRecording && isFinite(qualityConfig.targetDurationSec) && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.6rem', marginBottom: '.2rem' }}>
+                <span style={{ color: 'var(--text)' }}>{T(lang, 'recordGoodTime')}</span>
+                <span style={{ color: 'var(--green)' }}>
+                  {`${Math.floor(goodTimeSec/60).toString().padStart(2,'0')}:${Math.floor(goodTimeSec%60).toString().padStart(2,'0')}`}
+                  {' / '}
+                  {`${Math.floor(qualityConfig.targetDurationSec/60).toString().padStart(2,'0')}:${Math.floor(qualityConfig.targetDurationSec%60).toString().padStart(2,'0')}`}
+                </span>
+              </div>
+              <div style={{ height: 5, background: 'rgba(255,255,255,.05)', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{
                   height: '100%',
                   width: `${Math.min(100, (goodTimeSec / qualityConfig.targetDurationSec) * 100)}%`,
-                  background: 'linear-gradient(90deg, #3fb950, #85e89d)',
-                  borderRadius: 3,
-                  transition: 'width 0.5s ease',
+                  background: 'linear-gradient(90deg, var(--green), #85e89d)',
+                  borderRadius: 2, transition: 'width .5s',
                 }} />
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
         </>)}
       </div>
+    </>
+  );
 
-      {/* Recording controls */}
+  // ════════════════════════════════════════
+  // CONTROLS SECTION (Col C in split mode)
+  // ════════════════════════════════════════
+  const controlsSection = (
+    <>
+      {stitle('◉', lang === 'zh' ? '錄製 · 標記' : 'Record · Markers')}
+
+      {/* Recording controls card */}
       <div style={{
-        background: 'rgba(8,17,30,0.85)',
-        border: `1px solid ${isRecording ? 'rgba(248,81,73,0.35)' : 'rgba(93,109,134,0.3)'}`,
-        borderRadius: 14,
-        padding: '18px 24px',
-        transition: 'border-color 0.3s',
+        ...cardStyle,
+        borderColor: isRecording ? 'rgba(248,81,73,.28)' : 'var(--border)',
+        transition: 'border-color .3s',
+        padding: '.55rem .6rem',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-
-          {/* Status */}
-          {isRecording ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <div style={{
-                  width: 12, height: 12, borderRadius: '50%',
-                  background: '#f85149',
-                  animation: 'pulse 1s infinite',
-                }} />
-                <span style={{ color: '#f85149', fontWeight: 700, fontSize: 14 }}>
-                  {T(lang, 'signalRecording')}
-                </span>
-              </div>
-              <span style={{
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: 18, fontWeight: 700, color: '#c5d8f0',
-                letterSpacing: '0.05em',
-              }}>
-                {formatDuration(elapsed)}
-              </span>
-            </div>
-          ) : (
-            <div style={{ color: 'rgba(140,160,185,0.65)', fontSize: 13 }}>
-              {!isConnected
-                ? T(lang, 'recordNotConnected')
-                : recordedSamples.length > 0
-                  ? `${T(lang, 'recordSamples')}: ${recordedSamples.length.toLocaleString()}`
-                  : T(lang, 'recordStart')}
-            </div>
-          )}
-
-          {/* Artifact removal checkbox */}
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            cursor: 'pointer',
-            userSelect: 'none',
-            fontSize: 13,
-            color: useArtifactRemoval ? '#58a6ff' : 'rgba(140,160,185,0.65)',
+        {/* Status pill + rPPG toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.42rem' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '.35rem',
+            padding: '.25rem .5rem', borderRadius: 1,
+            border: `1px solid ${isRecording ? 'rgba(192,112,112,.4)' : 'var(--border)'}`,
+            background: isRecording ? 'rgba(192,112,112,.08)' : 'transparent',
+            fontSize: '.62rem', color: isRecording ? 'var(--red)' : 'var(--muted)',
+            flexShrink: 0,
           }}>
-            <input
-              type="checkbox"
-              checked={useArtifactRemoval}
-              onChange={e => setUseArtifactRemoval(e.target.checked)}
-              style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#58a6ff' }}
-            />
-            {T(lang, 'recordArtifactRemoval')}
-          </label>
+            <div style={{
+              width: 4, height: 4, borderRadius: '50%', background: 'currentColor',
+              animation: isRecording ? 'pulse .8s infinite' : 'none',
+            }} />
+            {isRecording
+              ? `${T(lang, 'signalRecording')} · ${formatDuration(elapsed)}`
+              : (isConnected ? T(lang, 'recordStart') : T(lang, 'recordNotConnected'))}
+          </div>
+          <div style={{ flex: 1 }} />
+          {/* rPPG sync toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.38rem', flexShrink: 0 }}>
+            <div style={{
+              width: 25, height: 12, background: enableRppg ? 'rgba(152,136,168,.3)' : 'rgba(255,255,255,.05)',
+              borderRadius: 6, border: `1px solid ${enableRppg ? 'rgba(152,136,168,.3)' : 'var(--border)'}`,
+              position: 'relative', cursor: isRecording ? 'not-allowed' : 'pointer', flexShrink: 0,
+              transition: 'background .2s', opacity: isRecording ? 0.6 : 1,
+            }} onClick={() => { if (!isRecording) { setEnableRppg(e => !e); if (!enableRppg) openVisioMynd(); } }}>
+              <div style={{
+                position: 'absolute', width: 6, height: 6, borderRadius: '50%',
+                background: enableRppg ? 'var(--mauve)' : 'var(--muted)',
+                top: 2, left: enableRppg ? 15 : 2, transition: 'left .18s, background .18s',
+              }} />
+            </div>
+            <span style={{ fontSize: '.7rem', color: 'var(--cream)', whiteSpace: 'nowrap' }}>
+              {lang === 'zh' ? '同步 VisioMynd' : 'Sync VisioMynd'}
+            </span>
+          </div>
+        </div>
 
-          {/* rPPG sync checkbox */}
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            cursor: isRecording ? 'not-allowed' : 'pointer',
-            userSelect: 'none',
-            fontSize: 13,
-            color: enableRppg ? '#5be0c0' : 'rgba(140,160,185,0.65)',
-            opacity: isRecording ? 0.6 : 1,
-          }}>
-            <input
-              type="checkbox"
-              checked={enableRppg}
-              disabled={isRecording}
-              onChange={e => {
-                setEnableRppg(e.target.checked);
-                if (e.target.checked) openVisioMynd();
-              }}
-              style={{ width: 14, height: 14, cursor: isRecording ? 'not-allowed' : 'pointer', accentColor: '#5be0c0' }}
-            />
-            同步 rPPG 錄製（VisioMynd）
-          </label>
-          {enableRppg && !isRecording && (
-            <button
-              onClick={openVisioMynd}
+        {/* 2×2 Action buttons */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.3rem', marginBottom: '.3rem' }}>
+          {/* Start */}
+          {!isRecording && (
+            <button onClick={() => { if (enableRppg) openVisioMynd(); onStartRecording(); }}
+              disabled={!isConnected}
               style={{
-                background: 'rgba(91,224,192,0.12)',
-                border: '1px solid rgba(91,224,192,0.4)',
-                borderRadius: 7,
-                color: '#5be0c0',
-                fontSize: 12,
-                fontWeight: 600,
-                padding: '5px 12px',
-                cursor: 'pointer',
-              }}
-            >
-              開啟 VisioMynd ↗
+                gridColumn: '1 / -1',
+                padding: '.56rem 0', border: 'none', borderRadius: 1,
+                background: isConnected ? 'rgba(152,136,168,.12)' : 'rgba(60,80,100,.2)',
+                color: isConnected ? 'var(--mauve)' : 'var(--muted)',
+                border: `1px solid ${isConnected ? 'rgba(152,136,168,.4)' : 'var(--border)'}`,
+                fontFamily: 'inherit', fontSize: '.72rem', letterSpacing: '.12em',
+                textTransform: 'uppercase', cursor: isConnected ? 'pointer' : 'not-allowed',
+              } as CSSProperties}>
+              {T(lang, 'recordStart')}
             </button>
           )}
-          {rppgResults && (
-            <span style={{ fontSize: 11, color: '#5be0c0', background: 'rgba(91,224,192,0.1)', borderRadius: 5, padding: '3px 8px' }}>
-              ✓ rPPG 資料已接收
-            </span>
-          )}
-
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            {/* Event marker button (during recording) */}
-            {isRecording && (
-              <button
-                onClick={addMarker}
-                style={{
-                  background: 'rgba(200,200,0,0.12)',
-                  border: '1px solid rgba(220,220,0,0.4)',
-                  borderRadius: 8,
-                  color: 'rgba(240,230,80,0.9)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  padding: '8px 14px',
-                  cursor: 'pointer',
-                }}
-              >
-                {T(lang, 'recordAddMarker')} [M]
-              </button>
-            )}
-
-            {/* Start / Stop */}
-            {isRecording ? (<>
-              <button
-                onClick={handleStopOnly}
-                style={{
-                  background: 'rgba(100,110,130,0.15)',
-                  border: '1px solid rgba(100,120,150,0.45)',
-                  borderRadius: 8,
-                  color: 'rgba(160,180,210,0.8)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  padding: '10px 16px',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s',
-                }}
-              >
-                {T(lang, 'recordStopOnly')}
-              </button>
-              <button
-                onClick={handleStop}
-                style={{
-                  background: 'rgba(248,81,73,0.18)',
-                  border: '1px solid rgba(248,81,73,0.55)',
-                  borderRadius: 8,
-                  color: '#f85149',
-                  fontSize: 14,
-                  fontWeight: 700,
-                  padding: '10px 24px',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s',
-                }}
-              >
-                {T(lang, 'recordStop')}
-              </button>
-              <button
-                onClick={handleStopAndReport}
-                disabled={reportStatus === 'analyzing'}
-                style={{
-                  background: reportStatus === 'analyzing' ? 'rgba(88,166,255,0.08)' : 'rgba(88,166,255,0.15)',
-                  border: '1px solid rgba(88,166,255,0.5)',
-                  borderRadius: 8,
-                  color: reportStatus === 'analyzing' ? 'rgba(88,166,255,0.5)' : '#58a6ff',
-                  fontSize: 14,
-                  fontWeight: 700,
-                  padding: '10px 20px',
-                  cursor: reportStatus === 'analyzing' ? 'not-allowed' : 'pointer',
-                  transition: 'background 0.15s',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {reportStatus === 'analyzing'
-                  ? T(lang, 'recordGeneratingReport')
-                  : T(lang, 'recordStopReport')}
-              </button>
-            </>) : (
-              <button
-                onClick={() => {
-                  if (enableRppg) openVisioMynd();
-                  onStartRecording();
-                }}
-                disabled={!isConnected}
-                style={{
-                  background: isConnected ? 'rgba(63,185,80,0.18)' : 'rgba(60,80,100,0.2)',
-                  border: `1px solid ${isConnected ? 'rgba(63,185,80,0.5)' : 'rgba(60,80,100,0.3)'}`,
-                  borderRadius: 8,
-                  color: isConnected ? '#3fb950' : 'rgba(100,120,140,0.5)',
-                  fontSize: 14,
-                  fontWeight: 700,
-                  padding: '10px 24px',
-                  cursor: isConnected ? 'pointer' : 'not-allowed',
-                  transition: 'background 0.15s',
-                }}
-              >
-                {T(lang, 'recordStart')}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Stats during recording */}
-        {isRecording && (
-          <div style={{
-            marginTop: 14,
-            display: 'flex', gap: 20,
-            padding: '10px 14px',
-            background: 'rgba(5,14,23,0.7)',
-            borderRadius: 8,
-            border: '1px solid rgba(60,80,100,0.3)',
-          }}>
-            <div>
-              <span style={{ fontSize: 11, color: 'rgba(140,160,185,0.6)' }}>
-                {T(lang, 'recordSamples')}
-              </span>
-              <div style={{
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: 16, fontWeight: 700, color: '#7ec8f5',
-              }}>
-                {recordedSamples.length.toLocaleString()}
-              </div>
-            </div>
-            <div>
-              <span style={{ fontSize: 11, color: 'rgba(140,160,185,0.6)' }}>
-                {T(lang, 'recordPackets')}
-              </span>
-              <div style={{
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: 16, fontWeight: 700, color: '#7ec8f5',
-              }}>
-                {eventMarkers.length}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* File report card — removed per product spec */}
-      {false && (
-      <div style={{
-        background: 'rgba(8,17,30,0.85)',
-        border: '1px solid rgba(93,109,134,0.3)',
-        borderRadius: 14,
-        padding: '18px 24px',
-      }}>
-        <h3 style={{ margin: '0 0 12px', fontSize: '0.92rem', fontWeight: 600, color: 'rgba(180,200,230,0.85)' }}>
-          {T(lang, 'recordFromFile')}
-        </h3>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Name input */}
-          <label style={{ fontSize: 12, color: 'rgba(180,200,230,0.75)', whiteSpace: 'nowrap' }}>姓名:</label>
-          <input
-            type="text"
-            value={fileName}
-            onChange={e => setFileName(e.target.value)}
-            placeholder="受測者姓名"
-            style={{
-              background: 'rgba(10,20,35,0.9)',
-              border: '1px solid rgba(93,109,134,0.5)',
-              borderRadius: 6,
-              color: '#cdd6e8',
-              fontSize: 12,
-              padding: '5px 8px',
-              outline: 'none',
-              width: 100,
-            }}
-          />
-          {/* Sex select */}
-          <label style={{ fontSize: 12, color: 'rgba(180,200,230,0.75)', whiteSpace: 'nowrap' }}>性別:</label>
-          <select
-            value={fileSex}
-            onChange={e => setFileSex(e.target.value as 'M' | 'F' | 'Other' | '')}
-            style={{
-              background: 'rgba(10,20,35,0.9)',
-              border: '1px solid rgba(93,109,134,0.5)',
-              borderRadius: 6,
-              color: '#cdd6e8',
-              fontSize: 12,
-              padding: '5px 8px',
-              outline: 'none',
-              colorScheme: 'dark',
-            }}
-          >
-            <option value="">—</option>
-            <option value="M">男 (M)</option>
-            <option value="F">女 (F)</option>
-            <option value="Other">其他</option>
-          </select>
-          {/* DOB input */}
-          <label style={{ fontSize: 12, color: 'rgba(180,200,230,0.75)', whiteSpace: 'nowrap' }}>
-            {T(lang, 'recordDob')}:
-          </label>
-          <input
-            type="date"
-            value={fileDob}
-            onChange={e => setFileDob(e.target.value)}
-            style={{
-              background: 'rgba(10,20,35,0.9)',
-              border: '1px solid rgba(93,109,134,0.5)',
-              borderRadius: 6,
-              color: '#cdd6e8',
-              fontSize: 12,
-              padding: '5px 8px',
-              outline: 'none',
-              colorScheme: 'dark',
-            }}
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            style={{ display: 'none' }}
-            onChange={e => {
-              const file = e.target.files?.[0];
-              if (file) handleFileReport(file);
-              // Reset so same file can be re-selected
-              e.target.value = '';
-            }}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={fileStatus === 'parsing' || fileStatus === 'analyzing'}
-            style={{
-              background: (fileStatus === 'parsing' || fileStatus === 'analyzing')
-                ? 'rgba(88,166,255,0.07)'
-                : 'rgba(88,166,255,0.13)',
-              border: '1px solid rgba(88,166,255,0.45)',
-              borderRadius: 8,
-              color: (fileStatus === 'parsing' || fileStatus === 'analyzing')
-                ? 'rgba(88,166,255,0.45)'
-                : '#58a6ff',
-              fontSize: 13,
-              fontWeight: 600,
-              padding: '9px 20px',
-              cursor: (fileStatus === 'parsing' || fileStatus === 'analyzing') ? 'not-allowed' : 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {fileStatus === 'parsing'
-              ? T(lang, 'recordFromFileParsing')
-              : fileStatus === 'analyzing'
-                ? T(lang, 'recordFromFileAnalyzing')
-                : T(lang, 'recordFromFile')}
-          </button>
-
-          {/* Status message */}
-          {fileStatus !== 'idle' && (
-            <span style={{
-              fontSize: 12,
-              color: fileStatus === 'done'
-                ? '#3fb950'
-                : fileStatus === 'error'
-                  ? '#f85149'
-                  : 'rgba(160,180,210,0.7)',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          {isRecording && (<>
+            {/* Stop only */}
+            <button onClick={handleStopOnly} style={{
+              padding: '.3rem 0', border: '1px solid var(--border)', borderRadius: 1,
+              background: 'transparent', color: 'var(--text)', fontFamily: 'inherit',
+              fontSize: '.66rem', cursor: 'pointer', letterSpacing: '.04em',
             }}>
-              {fileStatus === 'done'
-                ? `✓ ${T(lang, 'recordFromFileSuccess')}  ${fileStatusMsg}`
-                : fileStatus === 'error'
-                  ? `✗ ${fileStatusMsg}`
-                  : fileStatusMsg || '…'}
-            </span>
+              {T(lang, 'recordStopOnly')}
+            </button>
+            {/* Stop + download */}
+            <button onClick={handleStop} style={{
+              padding: '.3rem 0', border: '1px solid var(--border)', borderRadius: 1,
+              background: 'transparent', color: 'var(--text)', fontFamily: 'inherit',
+              fontSize: '.64rem', cursor: 'pointer', letterSpacing: '.04em',
+            }}>
+              {T(lang, 'recordStop')}
+            </button>
+            {/* Stop + report */}
+            <button onClick={handleStopAndReport}
+              disabled={reportStatus === 'analyzing'}
+              style={{
+                gridColumn: '1 / -1',
+                padding: '.3rem 0', border: '1px solid rgba(152,136,168,.35)', borderRadius: 1,
+                background: 'transparent', color: 'var(--mauve)', fontFamily: 'inherit',
+                fontSize: '.62rem', cursor: reportStatus === 'analyzing' ? 'not-allowed' : 'pointer',
+                letterSpacing: '.04em', opacity: reportStatus === 'analyzing' ? 0.5 : 1,
+              } as CSSProperties}>
+              {reportStatus === 'analyzing' ? T(lang, 'recordGeneratingReport') : T(lang, 'recordStopReport')}
+            </button>
+          </>)}
+        </div>
+
+        {/* Event marker button */}
+        <button onClick={addMarker} style={{
+          width: '100%', padding: '.28rem 0', display: 'block', textAlign: 'center',
+          border: '1px solid rgba(220,220,0,.4)', borderRadius: 1,
+          background: 'rgba(200,200,0,.08)', color: 'rgba(240,230,80,.95)',
+          fontFamily: 'inherit', fontSize: '.62rem', cursor: 'pointer', letterSpacing: '.04em',
+        }}>
+          {T(lang, 'recordAddMarker')} [M]
+        </button>
+      </div>
+
+      {/* Event markers list (grows) */}
+      <div style={{
+        ...cardStyle,
+        flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,
+        marginBottom: 0, overflow: 'hidden',
+      }}>
+        <div style={{
+          fontSize: '.6rem', letterSpacing: '.15em', textTransform: 'uppercase',
+          color: 'var(--cream)', marginBottom: '.32rem',
+          paddingBottom: '.22rem', borderBottom: '1px solid rgba(178,168,198,.1)',
+          display: 'flex', alignItems: 'center', gap: '.32rem', flexShrink: 0,
+        }}>
+          <span style={{ fontFamily: "'Crimson Pro','Georgia',serif", fontStyle: 'italic', fontSize: '.88rem', color: 'var(--plum)', lineHeight: 1 }}>◈</span>
+          <span>{lang === 'zh' ? '事件標記' : 'Event Markers'}</span>
+        </div>
+        <div style={{ fontSize: '.58rem', color: 'var(--muted)', marginBottom: '.26rem', flexShrink: 0 }}>
+          {lang === 'zh' ? '按空白鍵或 M 鍵新增標記' : 'Press Space or M to add a marker'}
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          {eventMarkers.length === 0 ? (
+            <div style={{ fontSize: '.58rem', color: 'var(--dim)', padding: '.3rem 0' }}>—</div>
+          ) : (
+            eventMarkers.map((m, i) => (
+              <div key={m.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '.26rem .38rem', borderBottom: '1px solid rgba(178,168,198,.06)',
+                fontSize: '.64rem',
+              }}>
+                <span style={{ color: 'var(--mauve)', fontSize: '.6rem', flexShrink: 0 }}>#{i + 1}</span>
+                <span style={{ color: 'var(--cream)', flex: 1, margin: '0 .35rem' }}>{m.label}</span>
+                <span style={{ color: 'var(--text)', fontSize: '.56rem' }}>
+                  {new Date(m.time).toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
+            ))
           )}
         </div>
-        <p style={{ margin: '10px 0 0', fontSize: 11, color: 'rgba(120,140,165,0.6)' }}>
-          {T(lang, 'recordFromFileHint')} · {T(lang, 'recordArtifactRemoval')}: {useArtifactRemoval ? '✓' : '✗'}
-        </p>
       </div>
-      )}
+    </>
+  );
+
+  // ════════════════════════════════════════
+  // RENDER
+  // ════════════════════════════════════════
+  if (layout === 'split') {
+    return (
+      <>
+        {/* Col B: settings (flex:2) */}
+        <div style={{ ...colStyle, flex: 2 }}>
+          {settingsSection}
+        </div>
+        {/* Col C: controls (flex:1) */}
+        <div style={{ ...colStyle, flex: 1 }}>
+          {controlsSection}
+        </div>
+      </>
+    );
+  }
+
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '.6rem .55rem' }}>
+      {settingsSection}
+      {controlsSection}
     </div>
   );
 };

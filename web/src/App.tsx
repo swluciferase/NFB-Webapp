@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, type CSSProperties } from 're
 import './App.css';
 import { Header } from './components/layout/Header';
 import type { PageType } from './components/layout/Header';
+import { SessionBanner } from './components/layout/SessionBanner';
 // TabType kept for internal guard logic only
 import type { TabType } from './components/layout/Sidebar';
 import { HomeView } from './components/views/HomeView';
@@ -499,23 +500,41 @@ function App() {
         onLangToggle={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
         activePage={activePage}
         onPageChange={handlePageChange}
-        isConnected={isConnected}
+      />
+      <SessionBanner
+        lang={lang}
+        status={status}
         isRecording={isRecording}
         deviceId={deviceId}
         packetRate={deviceStats.packetRate}
+        elapsed={isRecording && recordStartTime ? Date.now() - recordStartTime.getTime() : 0}
+        samplesCount={recordedSamples.length}
+        goodTimeSec={goodTimeSec}
+        goodPercent={goodPercent}
+        targetDurationSec={qualityConfig.targetDurationSec}
       />
       <div className="main-layout">
-        {/* ── CI page: 3-column layout ── */}
+
+        {/* ── CI page: Col A (connect+impedance) + Col B+C (record split) ── */}
         {activePage === 'ci' && (
           <div style={{
             display: 'flex',
             flex: 1,
-            gap: 10,
-            padding: '10px 12px',
+            gap: '1px',
+            background: 'var(--border)',
             overflow: 'hidden',
           }}>
-            {/* Col A: Connect status */}
-            <div style={{ ...ciColStyle, flex: '0 0 260px' }}>
+            {/* Col A: Connect + Impedance */}
+            <div style={{
+              flex: '0 0 260px',
+              background: 'var(--bg)',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              padding: '.6rem .55rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0,
+            }}>
               <HomeView
                 status={status}
                 stats={deviceStats}
@@ -524,10 +543,6 @@ function App() {
                 onConnect={handleConnect}
                 onDisconnect={handleDisconnect}
               />
-            </div>
-
-            {/* Col B: Impedance */}
-            <div style={{ ...ciColStyle, flex: '1 1 0' }}>
               <ImpedanceView
                 impedanceResults={latestImpedance ?? undefined}
                 isConnected={isConnected}
@@ -538,38 +553,37 @@ function App() {
               />
             </div>
 
-            {/* Col C: Record */}
-            <div style={{ ...ciColStyle, flex: '1 1 0' }}>
-              <RecordView
-                lang={lang}
-                isConnected={isConnected}
-                isRecording={isRecording}
-                subjectInfo={subjectInfo}
-                onSubjectInfoChange={setSubjectInfo}
-                onStartRecording={handleStartRecording}
-                onStopRecording={handleStopRecording}
-                recordedSamples={recordedSamples}
-                deviceId={deviceId}
-                filterDesc={computeFilterDesc(filterParams)}
-                notchDesc={computeNotchDesc(filterParams)}
-                startTime={recordStartTime}
-                onEventMarker={handleEventMarker}
-                eventMarkers={eventMarkers}
-                qualityConfig={qualityConfig}
-                onQualityConfigChange={setQualityConfig}
-                currentWindowStds={currentWindowStds}
-                goodTimeSec={goodTimeSec}
-                goodPercent={goodPercent}
-                shouldAutoStop={shouldAutoStop}
-              />
-            </div>
+            {/* Col B + C: RecordView in split layout */}
+            <RecordView
+              layout="split"
+              lang={lang}
+              isConnected={isConnected}
+              isRecording={isRecording}
+              subjectInfo={subjectInfo}
+              onSubjectInfoChange={setSubjectInfo}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+              recordedSamples={recordedSamples}
+              deviceId={deviceId}
+              filterDesc={computeFilterDesc(filterParams)}
+              notchDesc={computeNotchDesc(filterParams)}
+              startTime={recordStartTime}
+              onEventMarker={handleEventMarker}
+              eventMarkers={eventMarkers}
+              qualityConfig={qualityConfig}
+              onQualityConfigChange={setQualityConfig}
+              currentWindowStds={currentWindowStds}
+              goodTimeSec={goodTimeSec}
+              goodPercent={goodPercent}
+              shouldAutoStop={shouldAutoStop}
+            />
           </div>
         )}
 
         {/* ── Signal+FFT page ── */}
         {activePage === 'signal' && (
-          <div style={{ display: 'flex', flex: 1, gap: 8, overflow: 'hidden', padding: '10px 12px' }}>
-            <div style={{ flex: 2, minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flex: 1, gap: '1px', background: 'var(--border)', overflow: 'hidden' }}>
+            <div style={{ flex: 2, minWidth: 0, overflow: 'hidden', background: 'var(--bg)' }}>
               <WaveformView
                 packets={latestPackets}
                 filterParams={filterParams}
@@ -580,7 +594,7 @@ function App() {
                 onEventMarker={handleEventMarker}
               />
             </div>
-            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', background: 'var(--bg)' }}>
               <FftView
                 packets={latestPackets}
                 filterParams={filterParams}
@@ -591,8 +605,7 @@ function App() {
           </div>
         )}
 
-        {/* ── Training page ── */}
-        {/* TrainingView always mounted — keeps background processing and postMessage listener alive */}
+        {/* ── Training page (always mounted) ── */}
         <div style={{
           display: activePage === 'training' ? 'flex' : 'none',
           flex: 1,
@@ -608,29 +621,21 @@ function App() {
         </div>
       </div>
 
-      {/* Recording indicator overlay badge (visible from signal/training pages) */}
+      {/* Recording badge on signal/training pages */}
       {isRecording && activePage !== 'ci' && (
         <div style={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-          background: 'rgba(176,112,112,0.15)',
-          border: '1px solid rgba(176,112,112,0.4)',
-          borderRadius: 8,
-          padding: '7px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
+          position: 'fixed', bottom: 14, right: 14,
+          background: 'rgba(176,112,112,0.12)',
+          border: '1px solid rgba(176,112,112,0.35)',
+          borderRadius: 2,
+          padding: '.3rem .7rem',
+          display: 'flex', alignItems: 'center', gap: '.3rem',
           zIndex: 100,
           backdropFilter: 'blur(8px)',
         }}>
-          <div style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: 'var(--rose)',
-            animation: 'pulse 1s infinite',
-          }} />
-          <span style={{ fontSize: 12, color: 'var(--rose)', fontWeight: 400 }}>
-            {T(lang, 'signalRecording')} — {recordedSamples.length.toLocaleString()} samples
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--rose)', animation: 'pulse 1s infinite' }} />
+          <span style={{ fontSize: '.6rem', color: 'var(--rose)', letterSpacing: '.06em' }}>
+            {T(lang, 'signalRecording')} · {recordedSamples.length.toLocaleString()}
           </span>
         </div>
       )}

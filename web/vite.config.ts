@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 
-const APP_VERSION = '0.8.0'
+const APP_VERSION = '0.8.1'
 
 // https://vite.dev/config/
 export default defineConfig({

@@ -116,12 +116,22 @@ interface EegIndicator {
   presetKey: string; // '' = custom single-band, otherwise key from PRESET_OPTIONS
 }
 
+type CardiacMetric = 'lfhf' | 'rmssd-t';
+
+// RMSSD T-Score: population norm mean=42ms SD=20ms (adult HRV reference)
+function rmssdToTscore(rmssd: number): number {
+  return Math.min(100, Math.max(0, 50 + 10 * (rmssd - 42) / 20));
+}
+
 interface CardiacState {
   enabled: boolean;
+  metric: CardiacMetric;
   autoThreshold: boolean;
   lfValue: number;
   hfValue: number;
   lfHfRatio: number;
+  rmssd: number;
+  rmssdTscore: number;
   direction: Direction;
   threshold: number;
   history: number[];
@@ -544,14 +554,15 @@ const CardiacCard: FC<{
   liveHr: number | null;
   liveBreathing: number | null;
   onToggle: () => void;
+  onMetricChange: (m: CardiacMetric) => void;
   onDirectionChange: (d: Direction) => void;
   onThresholdChange: (delta: number) => void;
   onAutoThresholdToggle: () => void;
   onOpenVisioMynd: () => void;
-}> = ({ state, isLive, liveHr, liveBreathing, onToggle, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onOpenVisioMynd }) => {
+}> = ({ state, isLive, liveHr, liveBreathing, onToggle, onMetricChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onOpenVisioMynd }) => {
   const lang = useLang();
-  const ratio = state.lfHfRatio;
-  const aboveThreshold = ratio >= state.threshold;
+  const activeVal = state.metric === 'rmssd-t' ? state.rmssdTscore : state.lfHfRatio;
+  const aboveThreshold = activeVal >= state.threshold;
   const met = aboveThreshold === (state.direction === 'up');
   return (
     <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.3)', borderRadius: 10, padding: '10px 12px', marginBottom: 6, opacity: state.enabled ? 1 : 0.55 }}>
@@ -561,27 +572,55 @@ const CardiacCard: FC<{
           {isLive
             ? <Badge label="LIVE" color="#3fb950" bg="rgba(63,185,80,0.15)" />
             : <Badge label="—" color="rgba(130,150,180,0.5)" bg="rgba(93,109,134,0.10)" />}
-          <Badge label="LF/HF" color="#8ecfff" bg="rgba(88,166,255,0.15)" />
         </div>
         <button onClick={onToggle} style={{ background: state.enabled ? 'rgba(63,185,80,0.2)' : 'rgba(100,115,135,0.2)', border: `1px solid ${state.enabled ? 'rgba(63,185,80,0.5)' : 'rgba(100,115,135,0.4)'}`, borderRadius: 5, color: state.enabled ? '#3fb950' : '#6b7580', fontSize: 11, fontWeight: 600, padding: '2px 8px', cursor: 'pointer' }}>
           {state.enabled ? 'ON' : 'OFF'}
         </button>
       </div>
+
+      {/* Metric selector */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+        {(['lfhf', 'rmssd-t'] as CardiacMetric[]).map(m => {
+          const label = m === 'lfhf' ? T(lang, 'trainCardiacLfhf') : T(lang, 'trainCardiacRmssdT');
+          const active = state.metric === m;
+          return (
+            <button key={m} onClick={() => onMetricChange(m)} style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: `1px solid ${active ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`, background: active ? 'rgba(88,166,255,0.15)' : 'var(--bg-tertiary)', color: active ? '#8ecfff' : 'var(--text-secondary)', fontSize: 11, fontWeight: active ? 700 : 400, cursor: 'pointer' }}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* HR / Breathing */}
       {isLive && (liveHr !== null || liveBreathing !== null) && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
           {liveHr !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>HR</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveHr} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>bpm</span></div></div>}
           {liveBreathing !== null && <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{T(lang, 'trainBreathing')}</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{liveBreathing} <span style={{ fontSize: 11 }}>/min</span></div></div>}
         </div>
       )}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
-        {([['LF', state.lfValue], ['HF', state.hfValue]] as [string, number][]).map(([k, v]) => (
-          <div key={k}><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{k}</span><div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#dce9f8', fontWeight: 600 }}>{(v as number).toFixed(2)}</div></div>
-        ))}
-        <div style={{ flex: 1, textAlign: 'right' }}>
+
+      {/* Secondary metrics row — always show both */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
+        <div style={{ flex: 1 }}>
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>LF/HF</span>
-          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: '#f9a02e', fontWeight: 600 }}>{isLive ? ratio.toFixed(2) : '—'}</div>
+          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: state.metric === 'lfhf' ? '#f9a02e' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
+            {isLive ? state.lfHfRatio.toFixed(2) : '—'}
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>RMSSD</span>
+          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 13, color: 'rgba(200,215,235,0.55)', fontWeight: 600 }}>
+            {isLive && state.rmssd > 0 ? `${state.rmssd.toFixed(1)} ms` : '—'}
+          </div>
+        </div>
+        <div style={{ flex: 1, textAlign: 'right' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>RMSSD-T</span>
+          <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: state.metric === 'rmssd-t' ? '#c084fc' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
+            {isLive && state.rmssdTscore > 0 ? state.rmssdTscore.toFixed(1) : '—'}
+          </div>
         </div>
       </div>
+
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
         {(['up', 'down'] as Direction[]).map(d => (
           <button key={d} onClick={() => onDirectionChange(d)} style={{ flex: 1, padding: '4px 0', borderRadius: 5, border: `1px solid ${state.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.6)' : 'rgba(248,81,73,0.6)') : 'var(--border)'}`, background: state.direction === d ? (d === 'up' ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)') : 'var(--bg-tertiary)', color: state.direction === d ? (d === 'up' ? '#3fb950' : '#f85149') : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -590,8 +629,8 @@ const CardiacCard: FC<{
         ))}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
-          {isLive ? ratio.toFixed(2) : '—'}
+        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? (state.metric === 'rmssd-t' ? '#c084fc' : '#8ecfff') : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
+          {isLive ? activeVal.toFixed(state.metric === 'rmssd-t' ? 1 : 2) : '—'}
         </span>
         <Badge label={met ? T(lang, 'trainMet') : T(lang, 'trainNotMet')} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
@@ -609,7 +648,8 @@ const CardiacCard: FC<{
           value={+state.threshold.toFixed(2)}
           onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) onThresholdChange(v - state.threshold); }}
           disabled={state.autoThreshold}
-          step={0.1} min={0.1}
+          step={state.metric === 'rmssd-t' ? 1 : 0.1}
+          min={state.metric === 'rmssd-t' ? 1 : 0.1}
           style={{ width: 72, background: 'var(--bg-tertiary)', border: `1px solid ${state.autoThreshold ? 'rgba(88,166,255,0.2)' : 'rgba(248,129,74,0.4)'}`, borderRadius: 4, color: state.autoThreshold ? 'rgba(88,166,255,0.4)' : 'rgba(248,129,74,0.9)', fontSize: 11, padding: '2px 5px', fontFamily: 'ui-monospace,monospace', textAlign: 'right', opacity: state.autoThreshold ? 0.5 : 1 }}
         />
         <button
@@ -1125,8 +1165,10 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const [indicators, setIndicators] = useState<EegIndicator[]>(makeDefaultIndicators);
   const [cardiac, setCardiac] = useState<CardiacState>({
     enabled: true,
+    metric: 'lfhf',
     autoThreshold: false,
     lfValue: 0, hfValue: 0, lfHfRatio: 0,
+    rmssd: 0, rmssdTscore: 0,
     direction: 'up', threshold: 1.5, history: [],
   });
   const [bnb, setBnb] = useState<BnbState>(DEFAULT_BNB);
@@ -1136,15 +1178,17 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const [visioMyndHr, setVisioMyndHr] = useState<number | null>(null);
   const [visioMyndBreathing, setVisioMyndBreathing] = useState<number | null>(null);
   const [visioMyndLfhf, setVisioMyndLfhf] = useState<number | null>(null);
+  const [visioMyndRmssd, setVisioMyndRmssd] = useState<number | null>(null);
   const visioMyndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       if (!e.data || e.data.type !== 'visiomynd_data') return;
-      const { hr, breathing, lfhf } = e.data as { hr: number | null; breathing: number | null; lfhf: number | null };
+      const { hr, breathing, lfhf, rmssd } = e.data as { hr: number | null; breathing: number | null; lfhf: number | null; rmssd: number | null };
       setVisioMyndHr(hr ?? null);
       setVisioMyndBreathing(breathing ?? null);
       setVisioMyndLfhf(lfhf ?? null);
+      setVisioMyndRmssd(rmssd ?? null);
       setVisioMyndLive(true);
       if (visioMyndTimeoutRef.current) clearTimeout(visioMyndTimeoutRef.current);
       visioMyndTimeoutRef.current = setTimeout(() => setVisioMyndLive(false), 5000);
@@ -1302,24 +1346,30 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
         return { ...ind, value: newVal, history: newHistory, threshold: newThreshold };
       }));
 
-      // Cardiac — only update if VisioMynd live
+      // Cardiac — update when VisioMynd live
       setCardiac(c => {
         if (!c.enabled) return c;
         const W = W_VALUES[persistenceLevelRef.current - 1];
         if (visioMyndLive && visioMyndLfhf !== null) {
-          const next = visioMyndLfhf;
-          const newHistory = [...c.history, next].slice(-HISTORY_LEN);
+          const newLfhf = visioMyndLfhf;
+          const newRmssd = visioMyndRmssd ?? c.rmssd;
+          const newRmssdT = visioMyndRmssd !== null ? rmssdToTscore(visioMyndRmssd) : c.rmssdTscore;
+          const activeVal = c.metric === 'rmssd-t' ? newRmssdT : newLfhf;
+          const newHistory = [...c.history, activeVal].slice(-HISTORY_LEN);
           const newThreshold = c.autoThreshold
             ? (computeRMS(newHistory.slice(-W)) || c.threshold)
             : c.threshold;
           return {
-            ...c, lfHfRatio: next,
-            lfValue: next * 0.7 + 0.1, hfValue: Math.max(0.05, 0.7 - next * 0.05 + 0.1),
+            ...c,
+            lfHfRatio: newLfhf,
+            lfValue: newLfhf * 0.7 + 0.1, hfValue: Math.max(0.05, 0.7 - newLfhf * 0.05 + 0.1),
+            rmssd: newRmssd, rmssdTscore: newRmssdT,
             history: newHistory, threshold: newThreshold,
           };
         }
-        // Not live — keep previous, just extend history
-        const newHistory = [...c.history, c.lfHfRatio].slice(-HISTORY_LEN);
+        // Not live — extend history with last active value
+        const activeVal = c.metric === 'rmssd-t' ? c.rmssdTscore : c.lfHfRatio;
+        const newHistory = [...c.history, activeVal].slice(-HISTORY_LEN);
         const newThreshold = c.autoThreshold
           ? (computeRMS(newHistory.slice(-W)) || c.threshold)
           : c.threshold;
@@ -1398,7 +1448,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     }, 1000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getLiveBandPower, visioMyndLive, visioMyndLfhf]);
+  }, [getLiveBandPower, visioMyndLive, visioMyndLfhf, visioMyndRmssd]);
 
   // ── Open feedback window ──
   const openFeedbackWindow = useCallback((rawUrl: string) => {
@@ -1612,8 +1662,16 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           liveHr={visioMyndHr}
           liveBreathing={visioMyndBreathing}
           onToggle={() => setCardiac(c => ({ ...c, enabled: !c.enabled }))}
+          onMetricChange={m => setCardiac(c => ({
+            ...c, metric: m,
+            threshold: m === 'rmssd-t' ? 50 : 1.5,
+            history: [],
+          }))}
           onDirectionChange={d => setCardiac(c => ({ ...c, direction: d }))}
-          onThresholdChange={delta => setCardiac(c => ({ ...c, threshold: Math.max(0.1, c.threshold + delta) }))}
+          onThresholdChange={delta => setCardiac(c => ({
+            ...c,
+            threshold: Math.max(c.metric === 'rmssd-t' ? 1 : 0.1, c.threshold + delta),
+          }))}
           onAutoThresholdToggle={() => setCardiac(c => ({ ...c, autoThreshold: !c.autoThreshold }))}
           onOpenVisioMynd={handleOpenVisioMynd}
         />

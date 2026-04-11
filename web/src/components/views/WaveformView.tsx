@@ -113,17 +113,20 @@ function computeButterLP(f0: number, fs: number, q: number) {
   };
 }
 
-// Bandstop 42–65 Hz: f₀=√(42×65)≈52.25 Hz, Q=f₀/BW≈2.27
-// Single 2nd-order notch biquad spanning the mains interference band
-function computeBandstop(fs: number) {
-  const fLow = 42, fHigh = 65;
-  const f0 = Math.sqrt(fLow * fHigh);          // ≈ 52.25 Hz
-  const q  = f0 / (fHigh - fLow);              // ≈ 2.27
-  const w0 = 2 * Math.PI * f0 / fs;
-  const alpha = Math.sin(w0) / (2 * q);
-  const cosW  = Math.cos(w0);
-  const a0    = 1 + alpha;
-  return { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
+// Dual notch at 50 Hz + 60 Hz with Q=6
+// Q=6 → BW = f₀/6 ≈ 8–10 Hz per notch; together cover ~44–66 Hz
+// Each center is a perfect −∞ dB null; far better 60 Hz rejection than
+// a single bandstop biquad centred at 52 Hz (which gives only −5 dB at 60 Hz)
+const NOTCH_Q = 6;
+function computeDualNotch(fs: number) {
+  const makeCoeff = (f0: number) => {
+    const w0    = 2 * Math.PI * f0 / fs;
+    const alpha = Math.sin(w0) / (2 * NOTCH_Q);
+    const cosW  = Math.cos(w0);
+    const a0    = 1 + alpha;
+    return { b0: 1/a0, b1: -2*cosW/a0, b2: 1/a0, a1: -2*cosW/a0, a2: (1-alpha)/a0 };
+  };
+  return { c50: makeCoeff(50), c60: makeCoeff(60) };
 }
 
 // Apply a single biquad stage (Direct Form II transposed)
@@ -148,7 +151,7 @@ function applyFilterChain(
   params: FilterParams,
   hpCoeffs: ReturnType<typeof computeButterHP>[],
   lpCoeffs: ReturnType<typeof computeButterLP>[],
-  notchCoeffs: ReturnType<typeof computeBandstop>,
+  notchCoeffs: ReturnType<typeof computeDualNotch>,
 ): number {
   let s = x;
 
@@ -172,8 +175,10 @@ function applyFilterChain(
   }
 
   if (params.notchFreq !== 0) {
-    // Bandstop 42–65 Hz (single stage, uses ch*6+0/1)
-    s = applyBiquad(s, biquad.notchState, ch * 6, notchCoeffs.b0, notchCoeffs.b1, notchCoeffs.b2, notchCoeffs.a1, notchCoeffs.a2);
+    // Dual notch: 50 Hz (ch*6+0/1) + 60 Hz (ch*6+2/3)
+    const { c50, c60 } = notchCoeffs;
+    s = applyBiquad(s, biquad.notchState, ch * 6,     c50.b0, c50.b1, c50.b2, c50.a1, c50.a2);
+    s = applyBiquad(s, biquad.notchState, ch * 6 + 2, c60.b0, c60.b1, c60.b2, c60.a1, c60.a2);
   }
 
   return s;
@@ -229,8 +234,8 @@ export const WaveformView = ({
       compute1stOrderLP(filterParams.lpFreq, SAMPLE_RATE_HZ),
       computeButterLP(filterParams.lpFreq, SAMPLE_RATE_HZ, 1.0),
     ];
-    // Bandstop 42–65 Hz
-    const notch = computeBandstop(SAMPLE_RATE_HZ);
+    // Dual notch 50 Hz + 60 Hz, Q=6
+    const notch = computeDualNotch(SAMPLE_RATE_HZ);
     return { hp, lp, notch };
   }, [filterParams.hpFreq, filterParams.lpFreq]);
 

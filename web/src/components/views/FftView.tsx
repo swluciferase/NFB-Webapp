@@ -103,12 +103,21 @@ function applyFilterChain(
   notchCoeffs: ReturnType<typeof computeCombNotch>,
 ): number {
   let s = x;
+  // ① Saturation gate
+  const SAT_THRESH_UV = 3000 * 0.95;
+  if (Math.abs(s) > SAT_THRESH_UV) {
+    s = biquad.lastValidSample[ch] ?? 0;
+  } else {
+    biquad.lastValidSample[ch] = s;
+  }
+  // ② Adaptive DC blocker
   const DC_ALPHA_SLOW = 0.9985;
-  const DC_ALPHA_FAST = 0.99;
+  const DC_ALPHA_FAST = 0.95;
   const LARGE_DRIFT_THRESH = 150;
   const dcPrev = biquad.dcState[ch] ?? 0;
-  const drift = Math.abs(s - dcPrev);
-  const dcAlpha = drift > LARGE_DRIFT_THRESH ? DC_ALPHA_FAST : DC_ALPHA_SLOW;
+  const instDrift = Math.abs(s - dcPrev);
+  biquad.dcDriftRate[ch] = 0.9 * (biquad.dcDriftRate[ch] ?? 0) + 0.1 * instDrift;
+  const dcAlpha = biquad.dcDriftRate[ch] > LARGE_DRIFT_THRESH ? DC_ALPHA_FAST : DC_ALPHA_SLOW;
   const dcOut = s - dcPrev;
   biquad.dcState[ch] = dcAlpha * dcPrev + (1 - dcAlpha) * s;
   s = dcOut;

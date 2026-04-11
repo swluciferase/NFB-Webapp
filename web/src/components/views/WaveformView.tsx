@@ -144,6 +144,10 @@ function applyBiquad(
 
 // Apply full filter chain to one sample of one channel
 // Returns filtered sample. Uses shared FilterBiquadState refs.
+// ADC saturation threshold (95% of full scale)
+const ADC_FULL_SCALE_UV = 3000; // µV — typical STEEG device full-scale input
+const SAT_THRESH_UV = ADC_FULL_SCALE_UV * 0.95; // 2850 µV
+
 function applyFilterChain(
   x: number,
   ch: number,
@@ -155,15 +159,21 @@ function applyFilterChain(
 ): number {
   let s = x;
 
-  // DC removal (always on): single-pole IIR, α=0.9985
-  // Dual-rate DC blocker: fast α on large drift (electrode movement / artifact),
-  // slow α otherwise to preserve sub-Hz EEG components
-  const DC_ALPHA_SLOW = 0.9985; // τ ≈ 665 ms — normal operation
-  const DC_ALPHA_FAST = 0.99;   // τ ≈ 100 ms — fast drift / step recovery
-  const LARGE_DRIFT_THRESH = 150; // µV — above this switches to fast tracking
+  // ① Saturation gate: replace saturated samples with last valid value (sample-and-hold)
+  if (Math.abs(s) > SAT_THRESH_UV) {
+    s = biquad.lastValidSample[ch];
+  } else {
+    biquad.lastValidSample[ch] = s;
+  }
+
+  // ② Adaptive DC blocker: fast α on rapid drift, slow α for normal EEG
+  const DC_ALPHA_SLOW = 0.9985; // τ ≈ 665 ms — preserves sub-Hz components
+  const DC_ALPHA_FAST = 0.95;   // τ ≈ 20 ms  — rapid step / artifact recovery
+  const LARGE_DRIFT_THRESH = 150; // µV — smoothed drift rate threshold
   const dcPrev = biquad.dcState[ch];
-  const drift = Math.abs(s - dcPrev);
-  const dcAlpha = drift > LARGE_DRIFT_THRESH ? DC_ALPHA_FAST : DC_ALPHA_SLOW;
+  const instDrift = Math.abs(s - dcPrev);
+  biquad.dcDriftRate[ch] = 0.9 * biquad.dcDriftRate[ch] + 0.1 * instDrift;
+  const dcAlpha = biquad.dcDriftRate[ch] > LARGE_DRIFT_THRESH ? DC_ALPHA_FAST : DC_ALPHA_SLOW;
   const dcOut = s - dcPrev;
   biquad.dcState[ch] = dcAlpha * dcPrev + (1 - dcAlpha) * s;
   s = dcOut;
@@ -429,6 +439,9 @@ export const WaveformView = ({
           if (visible[ch]) {
             uv = channels[ch] ?? 0;
             uv = applyFilterChain(uv, ch, biquad, fp, hp, lp, notch);
+            // ③ Post-filter soft clamp: tanh compresses beyond ±scale,
+            //    prevents large transients from dominating the display
+            uv = scale * Math.tanh(uv / scale);
           }
           // Write y value directly into the flat xy array at this sweep position
           lines[ch]!.xy[sweepPos * 2 + 1] = toClipY(uv, ch, scale);

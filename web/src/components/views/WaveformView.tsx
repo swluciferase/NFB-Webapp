@@ -161,14 +161,15 @@ function applyFilterChain(
   s = dcOut;
 
   if (params.bandpassEnabled) {
-    // HP stage 1
-    s = applyBiquad(s, biquad.hpState1, ch * 2, hpCoeffs[0].b0, hpCoeffs[0].b1, hpCoeffs[0].b2, hpCoeffs[0].a1, hpCoeffs[0].a2);
-    // HP stage 2
-    s = applyBiquad(s, biquad.hpState2, ch * 2, hpCoeffs[1].b0, hpCoeffs[1].b1, hpCoeffs[1].b2, hpCoeffs[1].a1, hpCoeffs[1].a2);
+    // LP first (limits broadband amplitude entering HP states)
     // LP stage 1
     s = applyBiquad(s, biquad.lpState1, ch * 2, lpCoeffs[0].b0, lpCoeffs[0].b1, lpCoeffs[0].b2, lpCoeffs[0].a1, lpCoeffs[0].a2);
     // LP stage 2
     s = applyBiquad(s, biquad.lpState2, ch * 2, lpCoeffs[1].b0, lpCoeffs[1].b1, lpCoeffs[1].b2, lpCoeffs[1].a1, lpCoeffs[1].a2);
+    // HP stage 1
+    s = applyBiquad(s, biquad.hpState1, ch * 2, hpCoeffs[0].b0, hpCoeffs[0].b1, hpCoeffs[0].b2, hpCoeffs[0].a1, hpCoeffs[0].a2);
+    // HP stage 2
+    s = applyBiquad(s, biquad.hpState2, ch * 2, hpCoeffs[1].b0, hpCoeffs[1].b1, hpCoeffs[1].b2, hpCoeffs[1].a1, hpCoeffs[1].a2);
   }
 
   if (params.notchFreq !== 0) {
@@ -284,15 +285,40 @@ export const WaveformView = ({
     onEventMarker({ id, time, label });
   }, [onEventMarker]);
 
+  // Track whether we've seen the first packet after a connection (for DC init)
+  const hasPacketsRef = useRef(false);
+
   // Ingest packets
   useEffect(() => {
-    if (!packets || packets.length === 0) return;
+    if (!packets || packets.length === 0) {
+      // Reset DC init flag when packets stop (device disconnected)
+      hasPacketsRef.current = false;
+      return;
+    }
+    // On first packet batch after connection: seed DC blocker state with the raw
+    // input level so the high-pass filter sees a near-zero step (eliminates large
+    // initial oscillations when electrodes are floating or have a DC offset).
+    if (!hasPacketsRef.current) {
+      hasPacketsRef.current = true;
+      const biquad = filterBiquadRef.current;
+      const firstPacket = packets[0];
+      if (firstPacket?.eegChannels) {
+        for (let ch = 0; ch < CHANNEL_COUNT; ch++) {
+          biquad.dcState[ch] = firstPacket.eegChannels[ch] ?? 0;
+        }
+        biquad.hpState1.fill(0);
+        biquad.hpState2.fill(0);
+        biquad.lpState1.fill(0);
+        biquad.lpState2.fill(0);
+        biquad.notchState.fill(0);
+      }
+    }
     packetQueueRef.current.push(...packets);
     if (packetQueueRef.current.length > 4096)
       packetQueueRef.current.splice(0, packetQueueRef.current.length - 4096);
     const last = packets[packets.length - 1];
     if (last?.eegChannels) latestUvRef.current = last.eegChannels;
-  }, [packets]);
+  }, [packets, filterBiquadRef]);
 
   // Keyboard markers — only when canvas is visible
   useEffect(() => {

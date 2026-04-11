@@ -109,10 +109,11 @@ function applyFilterChain(
   s = dcOut;
 
   if (params.bandpassEnabled) {
-    s = applyBiquad(s, biquad.hpState1, ch * 2, hpCoeffs[0]!.b0, hpCoeffs[0]!.b1, hpCoeffs[0]!.b2, hpCoeffs[0]!.a1, hpCoeffs[0]!.a2);
-    s = applyBiquad(s, biquad.hpState2, ch * 2, hpCoeffs[1]!.b0, hpCoeffs[1]!.b1, hpCoeffs[1]!.b2, hpCoeffs[1]!.a1, hpCoeffs[1]!.a2);
+    // LP first (limits broadband amplitude entering HP states)
     s = applyBiquad(s, biquad.lpState1, ch * 2, lpCoeffs[0]!.b0, lpCoeffs[0]!.b1, lpCoeffs[0]!.b2, lpCoeffs[0]!.a1, lpCoeffs[0]!.a2);
     s = applyBiquad(s, biquad.lpState2, ch * 2, lpCoeffs[1]!.b0, lpCoeffs[1]!.b1, lpCoeffs[1]!.b2, lpCoeffs[1]!.a1, lpCoeffs[1]!.a2);
+    s = applyBiquad(s, biquad.hpState1, ch * 2, hpCoeffs[0]!.b0, hpCoeffs[0]!.b1, hpCoeffs[0]!.b2, hpCoeffs[0]!.a1, hpCoeffs[0]!.a2);
+    s = applyBiquad(s, biquad.hpState2, ch * 2, hpCoeffs[1]!.b0, hpCoeffs[1]!.b1, hpCoeffs[1]!.b2, hpCoeffs[1]!.a1, hpCoeffs[1]!.a2);
   }
 
   if (params.notchFreq !== 0) {

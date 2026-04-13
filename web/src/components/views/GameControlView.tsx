@@ -123,6 +123,7 @@ export const GameControlView: FC<GameControlViewProps> = ({ packets, filterParam
             setSessionConfig(cfg);
             setStep('duration');
           }}
+          onPreview={(cfg) => controllerRef.current?.previewLoadGame(cfg)}
         />
       )}
 

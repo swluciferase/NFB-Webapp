@@ -1,4 +1,4 @@
-import { useState, type FC } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import { T, type Lang } from '../../../i18n';
 import type { SessionConfig } from '../../SessionConfig';
 import type { Theme } from '../../Game';
@@ -13,6 +13,7 @@ const THEMES: Array<{ id: Theme['id']; labelZh: string; labelEn: string }> = [
 export interface SelectGameStepProps {
   lang: Lang;
   onSelect: (cfg: SessionConfig) => void;
+  onPreview?: (cfg: SessionConfig) => void;
 }
 
 interface CardDef {
@@ -47,10 +48,18 @@ const CARDS: CardDef[] = [
   },
 ];
 
-export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onSelect }) => {
+export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onSelect, onPreview }) => {
   const [picked, setPicked] = useState<CardDef['id'] | null>(null);
   const [modeId, setModeId] = useState<string>('auto');
   const [themeId, setThemeId] = useState<Theme['id']>('papercut');
+
+  // Live preview: whenever the loadout changes and a game is picked, push
+  // a loadGame to the subject window so the therapist can preview the look
+  // before locking in a duration.
+  useEffect(() => {
+    if (!picked || !onPreview) return;
+    onPreview({ gameId: picked, modeId, themeId, lang, plannedDurationSec: 300 });
+  }, [picked, modeId, themeId, lang, onPreview]);
 
   const pickedCard = CARDS.find((c) => c.id === picked);
 

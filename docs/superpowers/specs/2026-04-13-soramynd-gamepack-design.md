@@ -790,7 +790,7 @@ Before every release:
 - `game/control/GameSessionController.ts` state machine incl. `SUBJECT LOST` handling
 - `game/control/sessionWizard/` three steps (wizard + active HUD)
 - `game/control/OpenSubjectWindowButton.tsx`, `SubjectWindowStatus.tsx`, `TherapistHud.tsx`
-- **New Vite entry:** `public/nfb-game.html`, `src/gameWindow.tsx`, `vite.config.ts` `rollupOptions.input`
+- **New Vite entry:** `nfb-game.html` at project root (NOT inside `public/` — Vite multi-entry HTML must sit next to `index.html`), `src/gameWindow.tsx`, `vite.config.ts` `rollupOptions.input`
 - `game/subject/SubjectWindowRoot.tsx` + `GameEngine.ts` + `pixiBootstrap.ts` + Pixi v8 integration
 - `game/subject/InputCapture.ts` (keyboard → channel)
 - `game/themes/papercut/` (single theme only for M1)

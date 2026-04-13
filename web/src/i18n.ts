@@ -19,6 +19,8 @@ const translations: Record<string, Record<Lang, string>> = {
   tabRecord: { zh: '記錄', en: 'Record' },
   tabTraining: { zh: '訓練', en: 'Training' },
   tabGames: { zh: '遊戲訓練', en: 'Games' },
+  gameConnectRequired: { zh: '請先連接裝置才能進入遊戲訓練', en: 'Please connect a device before starting game training' },
+  gameSubjectPopupBlocked: { zh: '瀏覽器阻擋了彈出視窗，請允許後再試', en: 'Pop-ups are blocked. Please allow them and try again' },
 
   // Home view
   homeTitle: { zh: '裝置連接', en: 'Device Connection' },

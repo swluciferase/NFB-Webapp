@@ -24,6 +24,7 @@ export class GameEngine {
   private currentRunIndex = -1;
   private theme: Theme = papercutTheme;
   private lang: Lang = 'zh';
+  private loadingPromise: Promise<void> | null = null;
 
   constructor(args: GameEngineArgs) {
     this.container = args.container;
@@ -41,10 +42,20 @@ export class GameEngine {
   }
 
   private async onMessage(m: GameChannelMessage): Promise<void> {
+    if (this.loadingPromise) {
+      await this.loadingPromise;
+    }
     if (m.kind === 'loadGame') {
       this.theme = THEMES[m.themeId] ?? papercutTheme;
       this.lang = m.lang;
-      await this.loadGame(m.gameId);
+      this.loadingPromise = this.loadGame(m.gameId);
+      try {
+        await this.loadingPromise;
+      } catch (err) {
+        console.error('[GameEngine] loadGame failed', err);
+      } finally {
+        this.loadingPromise = null;
+      }
       return;
     }
     if (m.kind === 'runStart') {

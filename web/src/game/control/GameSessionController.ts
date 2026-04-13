@@ -164,6 +164,15 @@ export class GameSessionController {
 
   private onMessage(m: GameChannelMessage) {
     if (m.kind === 'subjectReady') {
+      if (this.config) {
+        this.channel.post({
+          kind: 'loadGame',
+          gameId: this.config.gameId,
+          modeId: this.config.modeId,
+          themeId: this.config.themeId,
+          lang: this.config.lang,
+        });
+      }
       if (this.state === 'connecting') this.transition('preview');
       this.lastSubjectHeartbeat = this.clock();
       return;

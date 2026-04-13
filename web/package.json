@@ -27,6 +27,10 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "pixi.js": "^8"
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.8.0",
+    "pixi.js": "^8",
+    "qrcode": "^1.5.4",
+    "webgl-plot": "^1.1.2"
   }
 }

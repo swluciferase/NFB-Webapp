@@ -2,6 +2,8 @@ import type { GameChannel, GameChannelMessage } from '../../services/gameChannel
 import type { GameFactory, GameInstance, Lang, Theme } from '../Game';
 import { createPixiHost, type PixiHost } from './pixiBootstrap';
 import { papercutTheme } from '../themes/papercut';
+import { ghibliTheme } from '../themes/ghibli';
+import { geometricTheme } from '../themes/geometric';
 import { planeManifest } from '../games/plane/manifest';
 
 export interface GameEngineArgs {
@@ -11,8 +13,8 @@ export interface GameEngineArgs {
 
 const THEMES: Record<Theme['id'], Theme> = {
   papercut: papercutTheme,
-  ghibli: papercutTheme,
-  geometric: papercutTheme,
+  ghibli: ghibliTheme,
+  geometric: geometricTheme,
 };
 
 export class GameEngine {

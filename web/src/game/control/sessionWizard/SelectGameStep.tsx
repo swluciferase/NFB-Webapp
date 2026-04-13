@@ -1,7 +1,14 @@
 import { useState, type FC } from 'react';
 import { T, type Lang } from '../../../i18n';
 import type { SessionConfig } from '../../SessionConfig';
+import type { Theme } from '../../Game';
 import { NfbSettingsPanel } from './NfbSettingsPanel';
+
+const THEMES: Array<{ id: Theme['id']; labelZh: string; labelEn: string }> = [
+  { id: 'papercut', labelZh: '剪紙', labelEn: 'Papercut' },
+  { id: 'ghibli', labelZh: '吉卜力', labelEn: 'Ghibli' },
+  { id: 'geometric', labelZh: '幾何', labelEn: 'Geometric' },
+];
 
 export interface SelectGameStepProps {
   lang: Lang;
@@ -43,6 +50,7 @@ const CARDS: CardDef[] = [
 export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onSelect }) => {
   const [picked, setPicked] = useState<CardDef['id'] | null>(null);
   const [modeId, setModeId] = useState<string>('auto');
+  const [themeId, setThemeId] = useState<Theme['id']>('papercut');
 
   const pickedCard = CARDS.find((c) => c.id === picked);
 
@@ -129,6 +137,30 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onSelect }) => {
       )}
 
       <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 12, marginBottom: 6 }}>
+          {lang === 'zh' ? '主題' : 'Theme'}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {THEMES.map((th) => (
+            <button
+              key={th.id}
+              onClick={() => setThemeId(th.id)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 6,
+                border: `1px solid ${themeId === th.id ? '#58a6ff' : 'rgba(93,109,134,0.3)'}`,
+                background: themeId === th.id ? 'rgba(88,166,255,0.08)' : 'transparent',
+                color: '#e4ecfa',
+                cursor: 'pointer',
+              }}
+            >
+              {lang === 'zh' ? th.labelZh : th.labelEn}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
         <NfbSettingsPanel lang={lang} />
       </div>
 
@@ -140,7 +172,7 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onSelect }) => {
             onSelect({
               gameId: pickedCard.id,
               modeId,
-              themeId: 'papercut',
+              themeId,
               lang,
               plannedDurationSec: 300,
             });

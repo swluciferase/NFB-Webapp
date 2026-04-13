@@ -2,11 +2,41 @@ import type { NfbIndicatorSetting } from '../services/nfbSettingsStore';
 
 export type Lang = 'zh' | 'en';
 
+export interface ParallaxLayerConfig {
+  seed: number;
+  amplitude: number;     // 0..1, fraction of screen height
+  baselineY: number;     // 0..1, fraction of screen height
+  scrollFactor: number;  // 0..1, multiplier on world scrollX
+  fillColor: string;
+}
+
+export interface PlaneVisualStyle {
+  bodyColor: string;
+  wingColor: string;
+  tailColor: string;
+  cockpitColor: string;
+  shadowColor: string;
+  shadowOffsetX: number;
+  shadowOffsetY: number;
+  trailColor: string;
+}
+
+export interface ThemeVisual {
+  bgTop: string;
+  bgBottom: string;
+  paperGrainColor: string;
+  paperGrainAlpha: number;     // 0..1
+  paperGrainDensity: number;   // dots per 1000 px²
+  parallax: ParallaxLayerConfig[];
+  plane: PlaneVisualStyle;
+}
+
 export interface Theme {
   id: 'papercut' | 'ghibli' | 'geometric';
   name: Record<Lang, string>;
   previewUrl: string;
   palette: Record<string, string>;
+  visual: ThemeVisual;
   bgmUrl: string;
   sfx: Record<string, string>;
   sprites: {

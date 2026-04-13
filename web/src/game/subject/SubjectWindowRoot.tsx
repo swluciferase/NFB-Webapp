@@ -2,67 +2,69 @@ import { useEffect, useRef, useState, type FC } from 'react';
 import {
   createGameChannel,
   GAME_PROTOCOL_VERSION,
-  type GameChannelMessage,
   type GameChannel,
 } from '../../services/gameChannel';
-
-type ConnectionState = 'connecting' | 'ready' | 'closed';
+import { GameEngine } from './GameEngine';
+import { installInputCapture } from './InputCapture';
 
 export const SubjectWindowRoot: FC = () => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<GameChannel | null>(null);
-  const [state, setState] = useState<ConnectionState>('connecting');
-  const [lastMessage, setLastMessage] = useState<string>('waiting for main window…');
+  const engineRef = useRef<GameEngine | null>(null);
 
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
     const ch = createGameChannel();
     channelRef.current = ch;
+    const engine = new GameEngine({ container, channel: ch });
+    engineRef.current = engine;
+    const removeInput = installInputCapture(ch);
 
-    const unsub = ch.subscribe((msg: GameChannelMessage) => {
-      setLastMessage(msg.kind);
-      if (msg.kind === 'hello') {
-        setState('ready');
-      }
-    });
+    engine
+      .start()
+      .then(() => {
+        ch.post({ kind: 'subjectReady', protocolVersion: GAME_PROTOCOL_VERSION });
+      })
+      .catch((err) => setError((err as Error).message));
 
-    ch.post({ kind: 'subjectReady', protocolVersion: GAME_PROTOCOL_VERSION });
-
-    // 2s heartbeat
     const hbId = window.setInterval(() => {
       ch.post({ kind: 'heartbeatSubject', t: performance.now() });
     }, 2000);
 
-    // Tell main we are closing
-    const onUnload = () => {
-      ch.post({ kind: 'subjectClosing' });
-    };
+    const onUnload = () => ch.post({ kind: 'subjectClosing' });
     window.addEventListener('beforeunload', onUnload);
 
     return () => {
       window.clearInterval(hbId);
       window.removeEventListener('beforeunload', onUnload);
-      unsub();
+      removeInput();
+      void engine.stop();
       ch.close();
-      channelRef.current = null;
-      setState('closed');
     };
   }, []);
 
   return (
-    <div
-      style={{
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 14,
-        letterSpacing: '0.08em',
-        color: 'rgba(230,240,255,0.35)',
-      }}
-    >
-      <div>
-        SoraMynd NFB Game — {state} · {lastMessage}
-      </div>
-    </div>
+    <>
+      <div ref={containerRef} style={{ position: 'fixed', inset: 0 }} />
+      {error && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#100',
+            color: '#f85149',
+            fontFamily: 'ui-monospace, monospace',
+          }}
+        >
+          Game engine error: {error}
+        </div>
+      )}
+    </>
   );
 };

@@ -1,16 +1,24 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
+import { resolve } from 'path'
 
-const APP_VERSION = '1.0.0'
+const APP_VERSION = '0.8.0-alpha'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     obfuscatorPlugin({
       include: ['src/**/*.js', 'src/**/*.ts', 'src/**/*.tsx'],
-      exclude: [/node_modules/, /src\/pkg\/.*\.js/, /src\/services\/wasm\.ts/, /src\/components\/layout\/Header\.tsx/],
+      exclude: [
+        /node_modules/,
+        /src\/pkg\/.*\.js/,
+        /src\/services\/wasm\.ts/,
+        /src\/components\/layout\/Header\.tsx/,
+        /src\/game\/subject\//,
+        /src\/game\/games\//,
+        /src\/gameWindow\.tsx/,
+      ],
       apply: 'build',
       debugger: true,
       options: {
@@ -30,5 +38,13 @@ export default defineConfig({
   base: './',
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        nfbGame: resolve(__dirname, 'nfb-game.html'),
+      },
+    },
   },
 })

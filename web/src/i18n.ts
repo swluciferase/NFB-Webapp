@@ -43,6 +43,16 @@ const translations: Record<string, Record<Lang, string>> = {
   gameNfbEnabled: { zh: '啟用指標', en: 'Enabled Indicators' },
   gameNfbNoneEnabled: { zh: '（無）', en: '(none)' },
   gameNfbEditHint: { zh: '若需修改，請到 Training Tab 調整，設定會自動同步。', en: 'To change settings, edit them in the Training tab — they sync automatically.' },
+  gameOpenSubject: { zh: '開啟受測者視窗', en: 'Open subject window' },
+  gameReopenSubject: { zh: '重新開啟', en: 'Reopen' },
+  gameSubjectIdle: { zh: '受測者視窗未開啟', en: 'Subject window closed' },
+  gameSubjectConnecting: { zh: '連線中…', en: 'Connecting…' },
+  gameSubjectReady: { zh: '已連線', en: 'Connected' },
+  gameSubjectActive: { zh: '進行中', en: 'Running' },
+  gameSubjectRest: { zh: '休息', en: 'Rest' },
+  gameSubjectPaused: { zh: '已暫停', en: 'Paused' },
+  gameSubjectLost: { zh: '受測者視窗已中斷', en: 'Subject window lost' },
+  gameSubjectDone: { zh: '結束', en: 'Finished' },
 
   // Home view
   homeTitle: { zh: '裝置連接', en: 'Device Connection' },

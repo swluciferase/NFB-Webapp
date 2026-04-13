@@ -5,15 +5,28 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10",
+    "@testing-library/jest-dom": "^6",
+    "@testing-library/react": "^16",
     "@types/bun": "latest",
+    "@types/node": "^25.6.0",
+    "@vitejs/plugin-react": "^6.0.1",
     "javascript-obfuscator": "^5.4.1",
+    "jsdom": "^25",
     "vite": "^8.0.3",
-    "vite-plugin-javascript-obfuscator": "^3.1.0"
+    "vite-plugin-javascript-obfuscator": "^3.1.0",
+    "vitest": "^2"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "fake-indexeddb": "^6",
+    "pixi.js": "^8"
   }
 }

@@ -18,6 +18,7 @@ const translations: Record<string, Record<Lang, string>> = {
   tabFft: { zh: '頻譜', en: 'FFT' },
   tabRecord: { zh: '記錄', en: 'Record' },
   tabTraining: { zh: '訓練', en: 'Training' },
+  tabGames: { zh: '遊戲訓練', en: 'Games' },
 
   // Home view
   homeTitle: { zh: '裝置連接', en: 'Device Connection' },

@@ -11,6 +11,7 @@ import { WaveformView } from './components/views/WaveformView';
 import { FftView } from './components/views/FftView';
 import { RecordView } from './components/views/RecordView';
 import { TrainingView, type TrainingSessionStats } from './components/views/TrainingView';
+import { GameControlView } from './components/views/GameControlView';
 import { ConnectModal } from './components/modals/ConnectModal';
 import { useEegStream } from './hooks/useEegStream';
 import { useQualityMonitor } from './hooks/useQualityMonitor';
@@ -669,6 +670,21 @@ function App() {
             hidden={activePage !== 'training'}
             lang={lang}
             onSessionTick={setTrainingStats}
+          />
+        </div>
+
+        {/* ── Games page (always mounted) ── */}
+        <div style={{
+          display: activePage === 'games' ? 'flex' : 'none',
+          flex: 1,
+          overflow: 'hidden',
+        }}>
+          <GameControlView
+            packets={isConnected ? latestPackets : undefined}
+            filterParams={filterParams}
+            hidden={activePage !== 'games'}
+            lang={lang}
+            isConnected={isConnected}
           />
         </div>
       </div>

@@ -36,13 +36,13 @@ export const Header: FC<HeaderProps> = ({
         <div style={{
           fontFamily: "'Crimson Pro', 'Georgia', serif",
           fontStyle: 'italic',
-          fontSize: '1.3rem',
+          fontSize: '1.15rem',
           fontWeight: 300,
           color: 'var(--mauve)',
-          letterSpacing: '-.05em',
+          letterSpacing: '-.04em',
           lineHeight: 1,
         }}>
-          ψ
+          Sr
         </div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{

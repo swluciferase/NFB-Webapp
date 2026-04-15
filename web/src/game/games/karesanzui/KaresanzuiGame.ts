@@ -650,7 +650,14 @@ export function createKaresanzuiGame(args: KaresanzuiGameArgs): GameInstance {
   }
 
   // ── Resize ────────────────────────────────────────────────────────────────
-  const resizeListener = () => layout();
+  let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  const resizeListener = () => {
+    if (resizeDebounceTimer !== null) clearTimeout(resizeDebounceTimer);
+    resizeDebounceTimer = setTimeout(() => {
+      resizeDebounceTimer = null;
+      layout();
+    }, 150);
+  };
   app.renderer.on('resize', resizeListener);
 
   // Initial draw
@@ -690,6 +697,7 @@ export function createKaresanzuiGame(args: KaresanzuiGameArgs): GameInstance {
     resume() { paused = false; },
 
     destroy() {
+      if (resizeDebounceTimer !== null) clearTimeout(resizeDebounceTimer);
       app.ticker.remove(tick);
       app.renderer.off('resize', resizeListener);
       for (const l of leafPool) { layers.leaves.removeChild(l.g); l.g.destroy(); }

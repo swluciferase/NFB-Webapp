@@ -198,9 +198,14 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
     return scored;
   }
 
+  let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   const resizeListener = () => {
-    if (!scene) return;
-    scene.layout(app.screen.width, app.screen.height);
+    if (resizeDebounceTimer !== null) clearTimeout(resizeDebounceTimer);
+    resizeDebounceTimer = setTimeout(() => {
+      resizeDebounceTimer = null;
+      if (!scene) return;
+      scene.layout(app.screen.width, app.screen.height);
+    }, 150);
   };
   app.renderer.on('resize', resizeListener);
 
@@ -208,7 +213,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
     if (!onStats) return;
     const isIdle = runIndex < 0;
     const stats = {
-      rl: Math.round(oo),
+      rl: isIdle ? 0 : Math.round(oo),
       inning: isIdle ? 0 : runIndex + 1,
       pitch: isIdle ? 0 : pitchCount,
       charge: isIdle ? 0 : Math.round(chargeSec > 0 ? chargeAccum / chargeSec : 0),
@@ -534,6 +539,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
       lastTickMs = 0; // avoid giant dt on first resumed frame
     },
     destroy() {
+      if (resizeDebounceTimer !== null) clearTimeout(resizeDebounceTimer);
       app.ticker.remove(tick);
       app.renderer.off('resize', resizeListener);
       if (scene) {

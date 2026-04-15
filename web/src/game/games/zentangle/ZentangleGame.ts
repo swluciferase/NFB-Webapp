@@ -236,9 +236,14 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   canvas.addEventListener('pointercancel', onPointerUp);
   canvas.addEventListener('pointerleave', onPointerUp);
 
+  let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   const resizeListener = () => {
-    layout();
-    regeneratePattern();
+    if (resizeDebounceTimer !== null) clearTimeout(resizeDebounceTimer);
+    resizeDebounceTimer = setTimeout(() => {
+      resizeDebounceTimer = null;
+      layout();
+      regeneratePattern();
+    }, 150);
   };
   app.renderer.on('resize', resizeListener);
 
@@ -333,6 +338,7 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
       paused = false;
     },
     destroy() {
+      if (resizeDebounceTimer !== null) clearTimeout(resizeDebounceTimer);
       app.ticker.remove(tick);
       app.renderer.off('resize', resizeListener);
       canvas.removeEventListener('pointerdown', onPointerDown);

@@ -75,7 +75,9 @@ export function buildPlaneScene(theme: Theme): PlaneScene {
   const sunG = new Graphics();
   const sunGlowG = new Graphics();
   const sunRaysG = new Graphics();
-  sunGlowG.filters = [new BlurFilter({ strength: 30, quality: 4 })];
+  // strength kept low (12) to avoid GPU timeout on mid-range hardware;
+  // strength 30 was causing the renderer process to crash under GPU pressure.
+  sunGlowG.filters = [new BlurFilter({ strength: 12, quality: 2 })];
   layers.sun.addChild(sunGlowG, sunRaysG, sunG);
 
   const hazeG = new Graphics();
@@ -275,9 +277,9 @@ export function buildPlaneScene(theme: Theme): PlaneScene {
       clouds[key] = [];
     }
     const bands = [
-      { layer: layers.cloudFar,  group: 'far'  as const, count: 6, yMin: 0.08, yMax: 0.35, scale: 0.65, depth: 0.15, alpha: 0.7, blur: true },
-      { layer: layers.cloudMid,  group: 'mid'  as const, count: 5, yMin: 0.12, yMax: 0.42, scale: 1.0,  depth: 0.35, alpha: 0.85, blur: false },
-      { layer: layers.cloudNear, group: 'near' as const, count: 3, yMin: 0.05, yMax: 0.30, scale: 1.55, depth: 0.7,  alpha: 1.0,  blur: false },
+      { layer: layers.cloudFar,  group: 'far'  as const, count: 6, yMin: 0.08, yMax: 0.35, scale: 0.65, depth: 0.15, alpha: 0.7 },
+      { layer: layers.cloudMid,  group: 'mid'  as const, count: 5, yMin: 0.12, yMax: 0.42, scale: 1.0,  depth: 0.35, alpha: 0.85 },
+      { layer: layers.cloudNear, group: 'near' as const, count: 3, yMin: 0.05, yMax: 0.30, scale: 1.55, depth: 0.7,  alpha: 1.0 },
     ];
     let seed = 1;
     for (const b of bands) {
@@ -286,9 +288,10 @@ export function buildPlaneScene(theme: Theme): PlaneScene {
         g.x = (i / b.count) * w * 1.4 + Math.random() * 120;
         g.y = h * (b.yMin + Math.random() * (b.yMax - b.yMin));
         g.alpha = b.alpha;
-        // One BlurFilter per sprite: local bounds never change as the cloud
-        // scrolls, so PIXI doesn't reallocate the filter texture each frame.
-        if (b.blur) g.filters = [new BlurFilter({ strength: 3, quality: 2 })];
+        // No BlurFilter on cloud sprites: any filter (even per-sprite) on a
+        // moving object forces a full filter re-run every frame in PIXI v8,
+        // causing visible flicker.  The overlapping alpha circles already
+        // produce soft-enough cloud edges without GPU blur.
         b.layer.addChild(g);
         clouds[b.group].push({ g, depth: b.depth });
       }

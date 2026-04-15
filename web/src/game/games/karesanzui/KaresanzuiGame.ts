@@ -132,8 +132,10 @@ export function createKaresanzuiGame(args: KaresanzuiGameArgs): GameInstance {
     leaves:     new Container(),
   };
   for (const c of Object.values(layers)) root.addChild(c);
-  // Blur is applied per-sprite in buildFarTrees() to avoid filter-texture
-  // reallocation when the container's bounding box changes.
+  // Container-level blur on static far trees — trees never move so the
+  // container bbox is stable and the filter texture is never reallocated.
+  // (Per-sprite blur would create 9 BlurFilter instances instead of 1.)
+  layers.treeFar.filters = [new BlurFilter({ strength: 2.0, quality: 2 })];
 
   // Pre-allocated Graphics objects
   const skyGfx        = new Graphics(); layers.sky.addChild(skyGfx);
@@ -377,9 +379,6 @@ export function createKaresanzuiGame(args: KaresanzuiGameArgs): GameInstance {
       g.circle(baseP.x+fpx*0.45,cy+fpx*0.05,fpx*0.78).fill({ color:0x3a5a30, alpha:0.94 });
       g.circle(baseP.x,          cy-fpx*0.20,fpx*0.95).fill({ color:0x466a38, alpha:0.92 });
       g.circle(baseP.x+fpx*0.10,cy-fpx*0.45,fpx*0.50).fill({ color:0x537a3e, alpha:0.88 });
-      // Per-sprite blur keeps local bounds stable so PIXI doesn't reallocate
-      // the filter texture each frame (same fix applied to cloud containers).
-      g.filters = [new BlurFilter({ strength: 2.0, quality: 4 })];
       layers.treeFar.addChild(g); farTreeGs.push(g);
     }
   }

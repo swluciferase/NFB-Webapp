@@ -80,7 +80,9 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
   const sunG = new Graphics();
   const sunGlowG = new Graphics();
   const sunRaysG = new Graphics();
-  sunGlowG.filters = [new BlurFilter({ strength: 30, quality: 4 })];
+  // strength kept low (12) to avoid GPU timeout on mid-range hardware;
+  // strength 30 was causing the renderer process to crash under GPU pressure.
+  sunGlowG.filters = [new BlurFilter({ strength: 12, quality: 2 })];
   const hazeG = new Graphics();
   const vignetteG = new Graphics();
 
@@ -1024,9 +1026,8 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
       g.x = (i / 6) * w * 1.2 + Math.random() * 100;
       g.y = h * (0.05 + Math.random() * 0.14);
       g.alpha = 0.85;
-      // Per-sprite blur: local bounds are stable as the cloud scrolls,
-      // so PIXI won't reallocate the filter texture each frame.
-      g.filters = [new BlurFilter({ strength: 3, quality: 2 })];
+      // No BlurFilter: any filter on a moving object forces a full re-run
+      // every frame in PIXI v8, causing visible flicker.
       layers.cloudFar.addChild(g);
       clouds.push({ g, depth: 0.2 + Math.random() * 0.3 });
     }

@@ -288,7 +288,9 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
     if (!onStats) return;
     const pct = samples.length ? (coveredCount / samples.length) * 100 : 0;
     onStats({
-      rl: Math.round(oo),
+      // Show 0 before the run starts so the HUD number doesn't flicker from
+      // noisy EEG OO data — feedback is only meaningful during an active run.
+      rl: runIndex >= 0 ? Math.round(oo) : 0,
       coveragePct: Math.round(pct * 10) / 10,
     });
   }

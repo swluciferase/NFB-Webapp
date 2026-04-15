@@ -277,10 +277,9 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
       return;
     }
 
-    // Pre-run idle: just animate clouds/sun and show live OO in the meter
+    // Pre-run idle: just animate clouds/sun
     if (runIndex < 0) {
       scene.tick({ now, dt, worldW: app.screen.width, worldH: app.screen.height });
-      scene.setMeter(oo / 100);
       emitStats();
       return;
     }
@@ -297,8 +296,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
           scene.pitcherWindup(now);
         }
         scene.setBallProgress(0);
-        // Show live OO during PREP so players have immediate biofeedback.
-        scene.setMeter(oo / 100);
+        scene.setMeter(0);
         const remainingSec = Math.max(1, Math.ceil((PREP_MS - inPitchMs) / 1000));
         scene.setCountdown(remainingSec);
       } else if (inPitchMs < PREP_MS + CHARGE_MS && !activePendingSwing) {

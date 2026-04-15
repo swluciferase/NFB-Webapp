@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type FC, type ChangeEvent } from 'react';
+import { serviceStart, serviceEnd, NoCreditError } from '../../services/creditApi';
 import type { EegPacket, FilterParams } from '../../types/eeg';
 import { CHANNEL_LABELS } from '../../types/eeg';
 import { useBandPower, NFB_BANDS } from '../../hooks/useBandPower';
@@ -1261,6 +1262,8 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const [bnbAudioBlob, setBnbAudioBlob] = useState<{ url: string; name: string } | null>(null);
   const nfbAudioElRef = useRef<HTMLAudioElement | null>(null);
   const nfbAudioInputRef = useRef<HTMLInputElement | null>(null);
+  const abCreditSidRef = useRef<number | null>(null);
+  const abSessionStartRef = useRef<number | null>(null);
 
   const sendToFeedbackWindow = useCallback((data: Record<string, unknown>) => {
     const win = feedbackWindowRef.current;
@@ -1589,7 +1592,16 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     }
   }, [baselinePhase, computeAndApplyBaseline]);
 
-  const handleStartSession = useCallback(() => {
+  const handleStartSession = useCallback(async () => {
+    try {
+      abCreditSidRef.current = await serviceStart('soramynd');
+      abSessionStartRef.current = Date.now();
+    } catch (e) {
+      if (e instanceof NoCreditError) {
+        alert('SoraMynd 使用時間已用完，請聯繫管理員補充額度。');
+        return;
+      }
+    }
     sessionHistoryRef.current = []; // reset session-specific history
     setSessionDuration(0);
     setRewardRate(0);
@@ -1623,6 +1635,11 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
   const handleStopSession = useCallback(() => {
     setSessionRunning(false);
+    if (abCreditSidRef.current && abSessionStartRef.current) {
+      serviceEnd(abCreditSidRef.current, (Date.now() - abSessionStartRef.current) / 1000);
+      abCreditSidRef.current = null;
+      abSessionStartRef.current = null;
+    }
   }, []);
 
   const oddIndicators = indicators.filter(i => i.id % 2 !== 0);

@@ -2,6 +2,7 @@ import { useEffect, useState, type FC } from 'react';
 import { T, type Lang } from '../../i18n';
 import type { SessionReport } from '../SessionConfig';
 import { gameSessionApi } from '../../services/gameSessionApi';
+import { getSessionTokenFromUrl, fetchSessionInfo } from '../../services/sessionApi';
 
 export interface SessionReportViewProps {
   lang: Lang;
@@ -15,21 +16,32 @@ export const SessionReportView: FC<SessionReportViewProps> = ({ lang, report, on
 
   useEffect(() => {
     setUploadState('uploading');
-    gameSessionApi
-      .upload({
-        sessionId: report.sessionId,
-        sessionToken: '',
+    (async () => {
+      const token = getSessionTokenFromUrl();
+      if (!token) {
+        // Standalone mode — no backend session to update
+        setUploadState('ok');
+        return;
+      }
+      const info = await fetchSessionInfo(token);
+      if (!info) {
+        setUploadState('error');
+        setErr('無法驗證 session token');
+        return;
+      }
+      const r = await gameSessionApi.upload({
+        sessionId: String(info.sessionId),
+        sessionToken: info.sessionToken,
         report,
         reportHtml: buildReportHtml(report),
-      })
-      .then((r) => {
-        if (r.ok) {
-          setUploadState('ok');
-        } else {
-          setUploadState('error');
-          setErr(r.error ?? '');
-        }
       });
+      if (r.ok) {
+        setUploadState('ok');
+      } else {
+        setUploadState('error');
+        setErr(r.error ?? '');
+      }
+    })();
   }, [report]);
 
   return (

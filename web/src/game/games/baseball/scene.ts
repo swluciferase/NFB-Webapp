@@ -1,4 +1,4 @@
-import { BlurFilter, Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { BaseballHitKind, Theme } from '../../Game';
 import type { Ballpark } from './ballparks';
 
@@ -80,9 +80,9 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
   const sunG = new Graphics();
   const sunGlowG = new Graphics();
   const sunRaysG = new Graphics();
-  // strength kept low (12) to avoid GPU timeout on mid-range hardware;
-  // strength 30 was causing the renderer process to crash under GPU pressure.
-  sunGlowG.filters = [new BlurFilter({ strength: 12, quality: 2 })];
+  // No BlurFilter on sunGlowG: sunRaysG rotates every frame in the same
+  // Container, forcing the filter to re-run every frame — major GPU cost.
+  // The overlapping alpha circles produce a soft glow without GPU blur.
   const hazeG = new Graphics();
   const vignetteG = new Graphics();
 

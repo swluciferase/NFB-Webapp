@@ -77,7 +77,10 @@ export function buildPlaneScene(theme: Theme): PlaneScene {
   const sunRaysG = new Graphics();
   // strength kept low (12) to avoid GPU timeout on mid-range hardware;
   // strength 30 was causing the renderer process to crash under GPU pressure.
-  sunGlowG.filters = [new BlurFilter({ strength: 12, quality: 2 })];
+  // No BlurFilter on sunGlowG: sunRaysG rotates every frame in the same
+  // Container, making the Container dirty every frame and forcing the filter
+  // to re-run each frame — the biggest per-frame GPU cost in the scene.
+  // The overlapping alpha circles already produce a soft glow without GPU blur.
   layers.sun.addChild(sunGlowG, sunRaysG, sunG);
 
   const hazeG = new Graphics();
@@ -148,8 +151,7 @@ export function buildPlaneScene(theme: Theme): PlaneScene {
   }
 
   // Build sun rays once (or on layout) as geometry centered at origin,
-  // then rotate the sprite in tick() — avoids per-frame clear()+redraw
-  // while sunGlowG's heavy BlurFilter is present in the same container.
+  // then rotate the sprite in tick() — avoids per-frame clear()+redraw.
   function buildSunRays() {
     if (sunRadius <= 0) return;
     sunRaysG.clear();

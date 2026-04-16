@@ -19,7 +19,6 @@
 
 import {
   Application,
-  BlurFilter,
   Container,
   FillGradient,
   Graphics,
@@ -434,8 +433,9 @@ export function createKaresanzuiGame(args: KaresanzuiGameArgs): GameInstance {
   let lastBuiltBloom   = -1;
 
   function buildCanopy() {
-    layers.treeL.removeChildren();
-    layers.treeR.removeChildren();
+    // Destroy old Graphics — removeChildren() alone leaks GPU vertex buffers.
+    for (const c of layers.treeL.removeChildren()) c.destroy({ children: true });
+    for (const c of layers.treeR.removeChildren()) c.destroy({ children: true });
     const sc = SEASON_CONFIG[season];
     for (let bi = 0; bi < BRANCH_DEFS.length; bi++) {
       const br = BRANCH_DEFS[bi];

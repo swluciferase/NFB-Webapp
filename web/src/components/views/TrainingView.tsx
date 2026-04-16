@@ -5,6 +5,11 @@ import { CHANNEL_LABELS } from '../../types/eeg';
 import { useBandPower, NFB_BANDS } from '../../hooks/useBandPower';
 import { DEFAULT_FILTER_PARAMS } from '../../types/eeg';
 import { T, LangContext, useLang, type Lang } from '../../i18n';
+import {
+  nfbSettingsStore,
+  type NfbSettings,
+  type NfbIndicatorSetting,
+} from '../../services/nfbSettingsStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1645,6 +1650,25 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const oddIndicators = indicators.filter(i => i.id % 2 !== 0);
   const evenIndicators = indicators.filter(i => i.id % 2 === 0);
   const enabledIndicators = indicators.filter(i => i.enabled);
+
+  // ── GamePack M1: mirror current NFB settings into nfbSettingsStore
+  // so the Games tab can consume them. Additive only — does not touch
+  // TrainingView's OO compute path, postMessage visual mask, or audio feedback.
+  useEffect(() => {
+    const settings: NfbSettings = {
+      indicators: indicators.map<NfbIndicatorSetting>((ind) => ({
+        id: `eeg${ind.id}`,
+        enabled: ind.enabled,
+        direction: ind.direction,
+        threshold: ind.threshold,
+        metricKey: ind.formula || `eeg${ind.id}`,
+      })),
+      difficultyLevel: difficultyLevel as 1 | 2 | 3 | 4 | 5,
+      persistenceLevel: persistenceLevel as 1 | 2 | 3 | 4 | 5,
+      qualitySensitivity: 3,
+    };
+    nfbSettingsStore.write(settings);
+  }, [indicators, difficultyLevel, persistenceLevel]);
 
   const formatDuration = (sec: number) =>
     `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;

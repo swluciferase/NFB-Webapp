@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import type { Lang } from '../../i18n';
 
-export type PageType = 'ci' | 'signal' | 'training';
+export type PageType = 'ci' | 'signal' | 'training' | 'games';
 
 export interface HeaderProps {
   lang: Lang;
@@ -14,6 +14,7 @@ const TAB_LABELS: Record<PageType, { zh: string; en: string }> = {
   ci:       { zh: '連線 · 記錄', en: 'Connect · Record' },
   signal:   { zh: '訊號 · 頻譜', en: 'Signal · FFT'     },
   training: { zh: '訓練',        en: 'Training'          },
+  games:    { zh: '遊戲訓練',    en: 'Games'             },
 };
 
 export const Header: FC<HeaderProps> = ({
@@ -72,7 +73,7 @@ export const Header: FC<HeaderProps> = ({
         background: 'var(--border)',
         margin: '0 .7rem',
       }}>
-        {(['ci', 'signal', 'training'] as PageType[]).map(page => {
+        {(['ci', 'signal', 'training', 'games'] as PageType[]).map(page => {
           const isActive = activePage === page;
           return (
             <button

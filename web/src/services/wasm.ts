@@ -19,7 +19,7 @@ export interface WasmApi {
 
 async function fetchWasmKey(): Promise<string> {
   const token = document.cookie.match(/steeg_token=([^;]+)/)?.[1];
-  const res = await fetch(`${API_BASE}/wasm-key?app=nfb`, {
+  const res = await fetch(`${API_BASE}/api/wasm-key?app=nfb`, {
     headers: token ? { Authorization: `Bearer ${decodeURIComponent(token)}` } : {},
     credentials: 'include',
   });

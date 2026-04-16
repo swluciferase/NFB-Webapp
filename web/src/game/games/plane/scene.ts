@@ -15,7 +15,7 @@ export interface PlaneScene {
   plane: Container;
   propHub: Container;
   trailLayer: Container;
-  layout(w: number, h: number): void;
+  layout(w: number, h: number, init?: boolean): void;
   tick(params: SceneTickParams): void;
   destroy(): void;
 }
@@ -342,7 +342,10 @@ export function buildPlaneScene(theme: Theme): PlaneScene {
 
   // ---------- LAYOUT ----------
 
-  function layout(w: number, h: number) {
+  // init=true on first call (spawns clouds/birds/sparkles).
+  // init=false on subsequent resize calls — dynamic elements are left in
+  // place so they never flash from destroy+recreate mid-session.
+  function layout(w: number, h: number, init = false) {
     paintSky(w, h);
     paintSunCoreAndGlow(w, h);
     buildSunRays();
@@ -367,9 +370,11 @@ export function buildPlaneScene(theme: Theme): PlaneScene {
     layers.mtnNear.addChild(mtnNearG);
     layers.grass.addChild(grassG);
 
-    spawnClouds(w, h);
-    spawnBirds(w, h);
-    spawnSparkles(w, h);
+    if (init) {
+      spawnClouds(w, h);
+      spawnBirds(w, h);
+      spawnSparkles(w, h);
+    }
   }
 
   // ---------- TICK ----------

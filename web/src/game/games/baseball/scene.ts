@@ -11,7 +11,7 @@ export interface BaseballSceneTickParams {
 
 export interface BaseballScene {
   root: Container;
-  layout(w: number, h: number): void;
+  layout(w: number, h: number, init?: boolean): void;
   tick(params: BaseballSceneTickParams): void;
   /** Animate the pitcher's wind-up + release. Called in the prep phase. */
   pitcherWindup(now: number): void;
@@ -983,7 +983,9 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
 
   // ---------- LAYOUT ----------
 
-  function layout(w: number, h: number) {
+  // init=true on first call (spawns clouds). init=false on resize calls —
+  // existing cloud sprites stay in place to avoid the flash from destroy+recreate.
+  function layout(w: number, h: number, init = false) {
     W = w;
     H = h;
 
@@ -1017,19 +1019,20 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
     layers.infield.addChild(infieldG);
     layers.bases.addChildAt(basesG, 0);
 
-    // Spawn clouds
-    for (const c of clouds) c.g.destroy();
-    clouds.length = 0;
-    let seed = 1;
-    for (let i = 0; i < 6; i++) {
-      const g = buildCloud(seed++, 0.8, visual.cloudBright, visual.cloudShade);
-      g.x = (i / 6) * w * 1.2 + Math.random() * 100;
-      g.y = h * (0.05 + Math.random() * 0.14);
-      g.alpha = 0.85;
-      // No BlurFilter: any filter on a moving object forces a full re-run
-      // every frame in PIXI v8, causing visible flicker.
-      layers.cloudFar.addChild(g);
-      clouds.push({ g, depth: 0.2 + Math.random() * 0.3 });
+    // Spawn clouds only on initial layout — never on resize, to avoid the
+    // destroy+recreate flash that appears as rapid flicker before training.
+    if (init) {
+      for (const c of clouds) c.g.destroy();
+      clouds.length = 0;
+      let seed = 1;
+      for (let i = 0; i < 6; i++) {
+        const g = buildCloud(seed++, 0.8, visual.cloudBright, visual.cloudShade);
+        g.x = (i / 6) * w * 1.2 + Math.random() * 100;
+        g.y = h * (0.05 + Math.random() * 0.14);
+        g.alpha = 0.85;
+        layers.cloudFar.addChild(g);
+        clouds.push({ g, depth: 0.2 + Math.random() * 0.3 });
+      }
     }
 
     // Diamond anchor points (must match buildInfield/buildBases)

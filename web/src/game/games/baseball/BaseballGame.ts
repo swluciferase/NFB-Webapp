@@ -93,7 +93,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
   const ballpark: Ballpark = ballparkFor(theme.id);
   let scene: BaseballScene | null = buildBaseballScene(theme, ballpark);
   stage.addChild(scene.root);
-  scene.layout(app.screen.width, app.screen.height);
+  scene.layout(app.screen.width, app.screen.height, true);
   // In dual mode the scoreboard shows 2×N half-innings; each column = one half.
   scene.setInningTotal(modeId === 'dual' ? inningTotal * 2 : inningTotal);
 

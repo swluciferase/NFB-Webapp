@@ -58,7 +58,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
   const { app, stage, theme, modeId = 'basic', onStats } = args;
   let scene: PlaneScene | null = buildPlaneScene(theme);
   stage.addChild(scene.root);
-  scene.layout(app.screen.width, app.screen.height);
+  scene.layout(app.screen.width, app.screen.height, true);
 
   let oo = 0;
   let targetY = app.screen.height * 0.5;

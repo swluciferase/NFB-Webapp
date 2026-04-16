@@ -132,10 +132,11 @@ export function createKaresanzuiGame(args: KaresanzuiGameArgs): GameInstance {
     leaves:     new Container(),
   };
   for (const c of Object.values(layers)) root.addChild(c);
-  // Container-level blur on static far trees — trees never move so the
-  // container bbox is stable and the filter texture is never reallocated.
-  // (Per-sprite blur would create 9 BlurFilter instances instead of 1.)
-  layers.treeFar.filters = [new BlurFilter({ strength: 2.0, quality: 2 })];
+  // No BlurFilter on treeFar: container-level filters allocate a texture
+  // the size of the full container bounds. On retina displays this becomes
+  // a full-screen-width texture that can exhaust GPU memory and kill the
+  // renderer process (Chrome Error code 5). The trees are small due to
+  // perspective distance — no GPU blur needed.
 
   // Pre-allocated Graphics objects
   const skyGfx        = new Graphics(); layers.sky.addChild(skyGfx);
@@ -644,7 +645,7 @@ export function createKaresanzuiGame(args: KaresanzuiGameArgs): GameInstance {
   function emitStats() {
     if (!onStats) return;
     onStats({
-      rl: Math.round(oo),
+      rl: runIndex >= 0 ? Math.round(oo) : 0,
       bloomPct: Math.round(treeBloom * 100),
     });
   }

@@ -1,9 +1,14 @@
-export const papercutPalette = {
-  bgTop: '#f6ead3',
-  bgBottom: '#e3c48b',
-  ground: '#4c3a28',
-  accent1: '#d95a3b',
-  accent2: '#2a619e',
-  accent3: '#6ba644',
-  text: '#1a1208',
+export const dayPalette = {
+  skyTop: '#6fb5ff',
+  skyBottom: '#c7ecff',
+  sun: '#fff4c7',
+  sunGlow: '#ffe68a',
+  mtnFar: '#8fb4d8',
+  mtnMid: '#6d91b8',
+  mtnNear: '#4c6f96',
+  grass: '#6aa86a',
+  grassTip: '#9fd27a',
+  cloudBright: '#ffffff',
+  cloudShade: '#dce8f4',
+  hazeTint: '#a8d2ff',
 } as const;

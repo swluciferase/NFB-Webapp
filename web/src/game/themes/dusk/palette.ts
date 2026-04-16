@@ -1,9 +1,14 @@
-export const ghibliPalette = {
-  bgTop: '#a8d8ea',
-  bgBottom: '#e8f4f8',
-  ground: '#5a7a3a',
-  accent1: '#f4a261',
-  accent2: '#264653',
-  accent3: '#8ecae6',
-  text: '#1d3557',
+export const duskPalette = {
+  skyTop: '#3a4770',
+  skyBottom: '#f4a574',
+  sun: '#ffd58a',
+  sunGlow: '#ff9c5c',
+  mtnFar: '#7785a8',
+  mtnMid: '#524766',
+  mtnNear: '#2e2840',
+  grass: '#3c4a5c',
+  grassTip: '#6c7a8c',
+  cloudBright: '#ffd1a5',
+  cloudShade: '#b88a7a',
+  hazeTint: '#ffb489',
 } as const;

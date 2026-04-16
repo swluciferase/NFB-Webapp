@@ -1,41 +1,30 @@
 import type { Theme } from '../../Game';
-import { geometricPalette } from './palette';
+import { nightPalette } from './palette';
 
-export const geometricTheme: Theme = {
-  id: 'geometric',
-  name: { zh: '幾何', en: 'Geometric' },
+export const nightTheme: Theme = {
+  id: 'night',
+  name: { zh: '夜晚', en: 'Night' },
   previewUrl: '',
-  palette: { ...geometricPalette },
+  palette: { ...nightPalette },
   visual: {
-    bgTop: '#0b132b',
-    bgBottom: '#1c2541',
-    paperGrainColor: '#5bc0be',
-    paperGrainAlpha: 0.05,
-    paperGrainDensity: 0.3,
-    parallax: [
-      // far jagged ridge
-      { seed: 811, amplitude: 0.22, baselineY: 0.60, scrollFactor: 0.30, fillColor: '#3a506b' },
-      // mid cyan ridge
-      { seed: 922, amplitude: 0.18, baselineY: 0.74, scrollFactor: 0.60, fillColor: '#5bc0be' },
-      // near orange ground
-      { seed: 933, amplitude: 0.16, baselineY: 0.88, scrollFactor: 1.0,  fillColor: '#ff6b35' },
-    ],
-    plane: {
-      bodyColor: '#fff275',
-      wingColor: '#ff6b35',
-      tailColor: '#5bc0be',
-      cockpitColor: '#0b132b',
-      shadowColor: '#0b132b',
-      shadowOffsetX: 3,
-      shadowOffsetY: 4,
-      trailColor: '#fff275',
-    },
+    skyTop: '#050a1e',
+    skyBottom: '#1a2a4a',
+    sun: '#e6ecff',
+    sunGlow: '#8aa0d0',
+    mtnFar: '#2a3550',
+    mtnMid: '#1a2236',
+    mtnNear: '#0d1420',
+    grass: '#0a1420',
+    grassTip: '#1e2e44',
+    cloudBright: '#6a7898',
+    cloudShade: '#2a3650',
+    hazeTint: '#4060a0',
+    hazeAlpha: 0.18,
+    ambient: 0.7,
   },
   bgmUrl: '',
   sfx: {},
   sprites: {
     plane: { body: '', trail: '', cloud: [], bird: '' },
-    golf: { ball: '', club: '', terrain: [], flag: '' },
-    maze: { rabbit: [], carrot: '', wall: [], goal: '' },
   },
 };

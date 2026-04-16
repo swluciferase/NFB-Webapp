@@ -1,9 +1,14 @@
-export const geometricPalette = {
-  bgTop: '#0b132b',
-  bgBottom: '#1c2541',
-  ground: '#3a506b',
-  accent1: '#ff6b35',
-  accent2: '#5bc0be',
-  accent3: '#fff275',
-  text: '#ffffff',
+export const nightPalette = {
+  skyTop: '#050a1e',
+  skyBottom: '#1a2a4a',
+  sun: '#e6ecff',
+  sunGlow: '#8aa0d0',
+  mtnFar: '#2a3550',
+  mtnMid: '#1a2236',
+  mtnNear: '#0d1420',
+  grass: '#0a1420',
+  grassTip: '#1e2e44',
+  cloudBright: '#6a7898',
+  cloudShade: '#2a3650',
+  hazeTint: '#4060a0',
 } as const;

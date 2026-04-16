@@ -18,13 +18,20 @@ export interface WasmApi {
 }
 
 async function fetchWasmKey(): Promise<string> {
-  const token = document.cookie.match(/steeg_token=([^;]+)/)?.[1];
+  const cookieToken = document.cookie.match(/steeg_token=([^;]+)/)?.[1];
+  const lsToken = localStorage.getItem('steeg_token');
+  const raw = cookieToken ?? lsToken ?? null;
+  const token = raw ? decodeURIComponent(raw) : null;
+  console.log('[WASM] fetching key, token present:', !!token);
   const res = await fetch(`${API_BASE}/api/wasm-key?app=nfb`, {
-    headers: token ? { Authorization: `Bearer ${decodeURIComponent(token)}` } : {},
-    credentials: 'include',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!res.ok) throw new Error(`WASM key fetch failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`WASM key fetch failed: ${res.status} ${body}`);
+  }
   const { key } = await res.json() as { key: string };
+  console.log('[WASM] key received, length:', key.length);
   return key;
 }
 
@@ -45,6 +52,7 @@ class WasmService {
   async init(): Promise<void> {
     if (this._initialized) return;
 
+    console.log('[WASM] init start');
     const pkg = await import('../pkg/steeg_wasm.js');
 
     const [keyHex, encResp] = await Promise.all([
@@ -52,11 +60,14 @@ class WasmService {
       fetch(encWasmUrl),
     ]);
     const encBytes = await encResp.arrayBuffer();
+    console.log('[WASM] encrypted bytes:', encBytes.byteLength);
     const wasmBytes = await decryptWasm(encBytes, keyHex);
+    console.log('[WASM] decrypted bytes:', wasmBytes.byteLength);
     await pkg.default(new Uint8Array(wasmBytes));
 
     this._module = pkg as unknown as WasmApi;
     this._initialized = true;
+    console.log('[WASM] init complete');
   }
 
   get api(): WasmApi {

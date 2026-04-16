@@ -1,21 +1,24 @@
 import type { GameChannel, GameChannelMessage } from '../../services/gameChannel';
-import type { GameFactory, GameInstance, Lang, Theme } from '../Game';
+import type { GameFactory, GameId, GameInstance, GameManifest, GameStats, GameStatsListener, Lang, Theme } from '../Game';
 import { createPixiHost, type PixiHost } from './pixiBootstrap';
-import { papercutTheme } from '../themes/papercut';
-import { ghibliTheme } from '../themes/ghibli';
-import { geometricTheme } from '../themes/geometric';
+import { THEMES } from '../themes/registry';
+import { dayTheme } from '../themes/day';
 import { planeManifest } from '../games/plane/manifest';
+import { baseballManifest } from '../games/baseball/manifest';
+import { zentangleManifest } from '../games/zentangle/manifest';
+import { karesanzuiManifest } from '../games/karesanzui/manifest';
+
+const MANIFESTS: Partial<Record<GameId, GameManifest>> = {
+  plane: planeManifest,
+  baseball: baseballManifest,
+  zentangle: zentangleManifest,
+  karesansui: karesanzuiManifest,
+};
 
 export interface GameEngineArgs {
   container: HTMLDivElement;
   channel: GameChannel;
 }
-
-const THEMES: Record<Theme['id'], Theme> = {
-  papercut: papercutTheme,
-  ghibli: ghibliTheme,
-  geometric: geometricTheme,
-};
 
 export class GameEngine {
   private container: HTMLDivElement;
@@ -24,14 +27,32 @@ export class GameEngine {
   private instance: GameInstance | null = null;
   private unsub: () => void = () => {};
   private currentRunIndex = -1;
-  private theme: Theme = papercutTheme;
+  private theme: Theme = dayTheme;
   private lang: Lang = 'zh';
+  private modeId: string = 'auto';
   private loadingPromise: Promise<void> | null = null;
+  private statsListener: GameStatsListener | null = null;
+  /** Signature of the last successfully-loaded loadGame payload. Used to
+   *  dedupe redundant loadGame messages so the scene isn't destroyed +
+   *  recreated when only irrelevant fields change (or when the same config
+   *  is re-broadcast on every wizard re-render). */
+  private lastLoadSignature: string | null = null;
 
   constructor(args: GameEngineArgs) {
     this.container = args.container;
     this.channel = args.channel;
   }
+
+  onStats(listener: GameStatsListener): () => void {
+    this.statsListener = listener;
+    return () => {
+      if (this.statsListener === listener) this.statsListener = null;
+    };
+  }
+
+  private emitStats = (stats: GameStats) => {
+    this.statsListener?.(stats);
+  };
 
   async start(): Promise<void> {
     this.host = await createPixiHost(this.container);
@@ -48,8 +69,48 @@ export class GameEngine {
       await this.loadingPromise;
     }
     if (m.kind === 'loadGame') {
-      this.theme = THEMES[m.themeId] ?? papercutTheme;
+      // Dedupe: if the payload is byte-for-byte identical to the previously
+      // loaded game, skip the whole destroy/recreate cycle. Without this
+      // guard, the wizard's live-preview effect can spam loadGame on every
+      // parent render and thrash the scene several times per second (visible
+      // as pre-start cloud flicker + GPU memory leak).
+      const signature = JSON.stringify({
+        gameId: m.gameId,
+        modeId: m.modeId,
+        themeId: m.themeId,
+        lang: m.lang,
+        plannedInnings: m.plannedInnings,
+        plannedCoveragePct: m.plannedCoveragePct,
+        patternId: m.patternId,
+        noFeedback: m.noFeedback,
+        dualTeamA: m.dualTeamA,
+        dualTeamB: m.dualTeamB,
+      });
+      if (signature === this.lastLoadSignature && this.instance) {
+        return;
+      }
+      this.lastLoadSignature = signature;
+
+      this.theme = THEMES[m.themeId] ?? dayTheme;
       this.lang = m.lang;
+      this.modeId = m.modeId;
+      // Stash session-level hints on the container element so game factories
+      // can read them (e.g. baseball needs plannedInnings for its scoreboard;
+      // zentangle needs the target coverage percent).
+      (this.container as unknown as { __baseballInningTotal?: number })
+        .__baseballInningTotal = m.plannedInnings ?? 9;
+      (this.container as unknown as { __zentangleTargetPct?: number })
+        .__zentangleTargetPct = m.plannedCoveragePct ?? 80;
+      (this.container as unknown as { __zentangleNoFeedback?: boolean })
+        .__zentangleNoFeedback = m.noFeedback ?? false;
+      (this.container as unknown as { __karesanzuiSeason?: string })
+        .__karesanzuiSeason = m.modeId;
+      (this.container as unknown as { __karesanzuiPattern?: string })
+        .__karesanzuiPattern = m.patternId ?? 'spiral';
+      (this.container as unknown as { __baseballDualTeamA?: string })
+        .__baseballDualTeamA = m.dualTeamA;
+      (this.container as unknown as { __baseballDualTeamB?: string })
+        .__baseballDualTeamB = m.dualTeamB;
       this.loadingPromise = this.loadGame(m.gameId);
       try {
         await this.loadingPromise;
@@ -67,8 +128,8 @@ export class GameEngine {
       });
       return;
     }
-    if (m.kind === 'oo') {
-      this.instance?.setOO(m.oo);
+    if (m.kind === 'rl') {
+      this.instance?.setRL(m.rl, m.ta);
       return;
     }
     if (m.kind === 'pause') {
@@ -87,7 +148,7 @@ export class GameEngine {
           runIndex: this.currentRunIndex,
           startedAt: 0,
           durationMs: 0,
-          ooSeries: [],
+          rlSeries: [],
           qualityPercent: 0,
           isValid: false,
           gameSpecific: {},
@@ -98,22 +159,29 @@ export class GameEngine {
     if (m.kind === 'sessionEnd') {
       this.instance?.destroy();
       this.instance = null;
+      this.lastLoadSignature = null;
+      return;
+    }
+    if (m.kind === 'gameInput') {
+      this.instance?.onInput?.(m.event);
       return;
     }
   }
 
-  private async loadGame(gameId: 'plane' | 'golf' | 'maze'): Promise<void> {
-    if (gameId !== 'plane') return;
+  private async loadGame(gameId: GameId): Promise<void> {
+    const manifest = MANIFESTS[gameId];
+    if (!manifest) return;
     if (this.instance) {
       this.instance.destroy();
       this.instance = null;
     }
-    const factory: GameFactory = await planeManifest.load();
+    const factory: GameFactory = await manifest.load();
     this.instance = factory({
       container: this.container,
       theme: this.theme,
       lang: this.lang,
-      modeId: 'auto',
+      modeId: this.modeId,
+      onStats: this.emitStats,
     });
   }
 

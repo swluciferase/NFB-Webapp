@@ -421,7 +421,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
 
       if (scene.plane.y <= skyY) scene.plane.y = skyY;
     } else {
-      scene.plane.alpha = 1;
+      if (modeId === 'active') scene.plane.alpha = 1;
       scene.plane.y += (targetY - scene.plane.y) * 0.045 * dt;
     }
 

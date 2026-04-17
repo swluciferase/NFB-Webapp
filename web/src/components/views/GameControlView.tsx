@@ -129,7 +129,7 @@ export const GameControlView: FC<GameControlViewProps> = ({
       setClassicWindowOpen(true);
       return;
     }
-    const w = window.open('/nfb-game.html', 'soramynd-subject', 'popup,width=1280,height=800');
+    const w = window.open(`${import.meta.env.BASE_URL}nfb-game.html`, 'soramynd-subject', 'popup,width=1280,height=800');
     if (!w) {
       alert(T(lang, 'gameSubjectPopupBlocked'));
       return;

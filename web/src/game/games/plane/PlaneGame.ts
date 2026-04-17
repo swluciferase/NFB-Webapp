@@ -190,67 +190,102 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     hudG.circle(px + 20, py, 4).fill({ color: 0xffaa00, alpha: 0.9 });
   }
 
-  // ── Tick helper: spawn + animate incoming missiles (alternating mode) ─────
+  // ── Tick helper: spawn balloon (alternating mode) ─────────────────────────
+
+  function spawnBalloon(now: number, w: number, h: number) {
+    if (!scene) return;
+    const skyY = h * 0.22;
+    const groundY = h * 0.78;
+    const isPickup = fuel < PICKUP_FUEL_THRESHOLD && Math.random() < 0.4;
+    const color = isPickup ? 0x44cc66 : 0xff4444;
+    const y = skyY + Math.random() * (groundY - skyY);
+
+    const g = new Graphics();
+    g.circle(0, -BALLOON_RADIUS, BALLOON_RADIUS).fill({ color, alpha: 0.9 });
+    g.moveTo(0, 0).lineTo(0, -BALLOON_RADIUS + 2);
+    g.stroke({ color: 0x334455, width: 2 });
+    g.x = w + BALLOON_RADIUS;
+    g.y = y;
+    scene.trailLayer.addChild(g);
+    balloons.push({ g, x: g.x, y, isPickup, active: true });
+
+    nextBalloonSpawnMs = now
+      + BALLOON_SPAWN_INTERVAL_MIN_MS
+      + Math.random() * (BALLOON_SPAWN_INTERVAL_MAX_MS - BALLOON_SPAWN_INTERVAL_MIN_MS);
+  }
+
+  // ── Tick helper: move + collide balloons (alternating mode) ───────────────
 
   function tickAlternating(now: number, w: number, h: number, dt: number) {
     if (!scene) return;
-    const groundY = h * 0.78;
-    const skyY = h * 0.22;
 
-    // Spawn a new missile if slot is empty and enough time has passed
-    if (incomingMissiles.length === 0 && now - lastMissileSpawn >= MISSILE_SPAWN_INTERVAL_MS) {
-      const g = new Graphics();
-      g.circle(0, 0, MISSILE_RADIUS).fill({ color: 0xff3333 });
-      const spawnY = skyY + Math.random() * (groundY - skyY);
-      g.x = w + MISSILE_RADIUS;
-      g.y = spawnY;
-      scene.trailLayer.addChild(g);
-      incomingMissiles.push({ g, x: g.x, y: spawnY, active: true });
-      lastMissileSpawn = now;
+    // Spawn batch when timer fires
+    if (now >= nextBalloonSpawnMs) {
+      const count = Math.random() < 0.3 ? 2 : 1;
+      for (let i = 0; i < count; i++) spawnBalloon(now, w, h);
     }
 
-    // Move missiles
-    for (let i = incomingMissiles.length - 1; i >= 0; i--) {
-      const m = incomingMissiles[i];
-      if (!m.active) { incomingMissiles.splice(i, 1); continue; }
+    const isFlickering = now < flickerUntilMs;
+    const planeX = scene.plane.x;
+    const planeY = scene.plane.y;
+    const scrollSpeed = 2 + 2 * (rl / 100);
 
-      m.x -= MISSILE_SPEED * dt;
-      m.g.x = m.x;
+    for (let i = balloons.length - 1; i >= 0; i--) {
+      const b = balloons[i];
+      if (!b.active) { balloons.splice(i, 1); continue; }
 
-      // Check collision with plane
-      const planeX = scene.plane.x;
-      const planeY = scene.plane.y;
-      const dx = m.x - planeX;
-      const dy = m.y - planeY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < PLANE_HIT_RADIUS + MISSILE_RADIUS) {
-        // Hit!
-        altMisses++;
-        scene.trailLayer.removeChild(m.g);
-        m.g.destroy();
-        m.active = false;
-        incomingMissiles.splice(i, 1);
-        lastMissileSpawn = now - MISSILE_SPAWN_INTERVAL_MS * 0.5; // short cooldown
+      b.x -= scrollSpeed * dt;
+      b.g.x = b.x;
+
+      // Off-screen left
+      if (b.x < -BALLOON_RADIUS * 2) {
+        scene.trailLayer.removeChild(b.g);
+        b.g.destroy();
+        balloons.splice(i, 1);
         continue;
       }
 
-      // Passed behind the plane: successful dodge
-      if (m.x < planeX - PLANE_HIT_RADIUS - MISSILE_RADIUS) {
-        altScore++;
-        scene.trailLayer.removeChild(m.g);
-        m.g.destroy();
-        m.active = false;
-        incomingMissiles.splice(i, 1);
-      }
+      // Collision: compare plane center to balloon circle center
+      const dx = b.x - planeX;
+      const dy = (b.y - BALLOON_RADIUS) - planeY;
+      if (Math.sqrt(dx * dx + dy * dy) < BALLOON_HIT_RADIUS) {
+        scene.trailLayer.removeChild(b.g);
+        b.g.destroy();
+        b.active = false;
+        balloons.splice(i, 1);
 
-      // Off screen left
-      if (m.x < -MISSILE_RADIUS * 2) {
-        scene.trailLayer.removeChild(m.g);
-        m.g.destroy();
-        m.active = false;
-        incomingMissiles.splice(i, 1);
+        if (b.isPickup) {
+          fuel = Math.min(MAX_FUEL, fuel + 1);
+          pickupsCollected++;
+        } else if (!isFlickering) {
+          fuel = Math.max(0, fuel - 1);
+          fuelLost++;
+          flickerUntilMs = now + FLICKER_DURATION_MS;
+          if (fuel <= 0) {
+            const result: RunResult = {
+              runIndex,
+              startedAt: runStarted,
+              durationMs: now - runStarted,
+              rlSeries,
+              qualityPercent: 0,
+              isValid: true,
+              gameSpecific: { fuelLost, pickupsCollected, distanceM: Math.round(distanceM) },
+            };
+            const cb = finishCb;
+            finishCb = null;
+            runIndex = -1;
+            cb?.(result);
+            return;
+          }
+        }
       }
     }
+
+    // Flicker plane alpha
+    const isFlickeringNow = now < flickerUntilMs;
+    scene.plane.alpha = isFlickeringNow
+      ? 0.3 + 0.7 * Math.abs(Math.sin(now * FLICKER_HZ * Math.PI / 1000))
+      : 1;
   }
 
   // ── Tick helper: enemy + player missiles (active mode) ────────────────────
@@ -461,7 +496,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
 
     if (elapsedMs >= RUN_DURATION_MS && finishCb && runIndex >= 0) {
       const gameSpecific: Record<string, number | boolean> =
-        modeId === 'alternating' ? { score: altScore, misses: altMisses, distanceM: Math.round(distanceM) }
+        modeId === 'alternating' ? { fuelLost, pickupsCollected, distanceM: Math.round(distanceM) }
         : modeId === 'active'    ? { hits: activeHits, misses: activeMisses }
         : { distanceM: Math.round(distanceM), timeAboveMidSec, fuelLost };
       const result: RunResult = {
@@ -513,25 +548,24 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       planeVelY = 0;
       groundBounceVel = 0;
       if (scene) scene.plane.alpha = 1;
-      altScore = 0;
-      altMisses = 0;
+      // Reset alternating mode state
+      for (const b of balloons) {
+        scene?.trailLayer.removeChild(b.g);
+        b.g.destroy();
+      }
+      balloons.length = 0;
+      nextBalloonSpawnMs = performance.now() + 1500; // first balloon after 1.5s
+      pickupsCollected = 0;
       activeHits = 0;
       activeMisses = 0;
       aimOffset = 0;
       canFire = true;
-      lastMissileSpawn = performance.now() - MISSILE_SPAWN_INTERVAL_MS + 1000; // first missile after 1s
       lastEnemyMove = performance.now();
       if (enemyG) {
         enemyY = app.screen.height * 0.5;
         enemyTargetY = app.screen.height * 0.5;
         enemyG.y = enemyY;
       }
-      // Clear any stale missiles
-      for (const m of incomingMissiles) {
-        scene?.trailLayer.removeChild(m.g);
-        m.g.destroy();
-      }
-      incomingMissiles.length = 0;
       if (playerMissile) {
         scene?.trailLayer.removeChild(playerMissile.g);
         playerMissile.g.destroy();
@@ -588,8 +622,8 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       app.renderer.off('resize', resizeListener);
       for (const p of particles) p.g.destroy();
       particles.length = 0;
-      for (const m of incomingMissiles) m.g.destroy();
-      incomingMissiles.length = 0;
+      for (const b of balloons) b.g.destroy();
+      balloons.length = 0;
       if (playerMissile) { playerMissile.g.destroy(); playerMissile = null; }
       if (enemyG) { enemyG.destroy(); enemyG = null; }
       hudG.destroy();

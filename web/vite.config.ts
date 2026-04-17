@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.1.0'
+const APP_VERSION = '1.2.0'
 
 export default defineConfig({
   plugins: [

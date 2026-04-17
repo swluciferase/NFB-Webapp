@@ -17,33 +17,31 @@ const MAX_TILT_RAD = 0.5;
 const PROP_BASE_RPS = 0.6;
 const SHAKE_RL_THRESHOLD = 70;
 
+// Shared — fuel system
+const MAX_FUEL = 5;
+const FLICKER_DURATION_MS = 1500;
+const FLICKER_HZ = 8;
+
 // Basic mode
-const BASIC_LIVES = 3;
 const GROUND_BOUNCE_VEL = -8;
 
-// Alternating mode — missiles
-const MISSILE_SPEED = 3.5;
-const MISSILE_RADIUS = 10;
-const PLANE_HIT_RADIUS = 22;
-const MISSILE_SPAWN_INTERVAL_MS = 4000;
+// Alternating mode — balloons
+const BALLOON_RADIUS = 18;
+const BALLOON_HIT_RADIUS = 28;
+const BALLOON_SPAWN_INTERVAL_MIN_MS = 3000;
+const BALLOON_SPAWN_INTERVAL_MAX_MS = 5000;
+const PICKUP_FUEL_THRESHOLD = 3;
 
-// Active mode — enemy plane + shooting
+// Active mode
 const ENEMY_X_FRACTION = 0.80;
-const ENEMY_MOVE_INTERVAL_MS = 3500;
-const MISSILE_FLY_SPEED = 6;
-const AIM_ADJUST_PX = 18;
-const AIM_MAX_OFFSET = 70;
+const MISSILE_FLY_SPEED = 9;
+const AIM_ADJUST_PX = 12;
+const AIM_MAX_OFFSET = 40;
+const ENEMY_DRIFT_MS = 800;
 
 interface TrailParticle {
   g: Graphics;
   bornMs: number;
-}
-
-interface Missile {
-  g: Graphics;
-  x: number;
-  y: number;
-  active: boolean;
 }
 
 interface PlayerMissile {
@@ -72,17 +70,26 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
   let timeAboveMidSec = 0;
   let lastAccumSec = 0;
 
-  // Basic mode — lives
-  let lives = BASIC_LIVES;
+  // Shared — fuel
+  let fuel = MAX_FUEL;
+  let fuelLost = 0;
+  let flickerUntilMs = 0;
+
+  // Basic mode
   let groundBounceVel = 0;
   let planeVelY = 0;
-  let livesLost = 0;
 
-  // Alternating mode — incoming missiles
-  const incomingMissiles: Missile[] = [];
-  let lastMissileSpawn = 0;
-  let altScore = 0;
-  let altMisses = 0;
+  // Alternating mode — balloons
+  interface BalloonSprite {
+    g: Graphics;
+    x: number;
+    y: number;
+    isPickup: boolean;
+    active: boolean;
+  }
+  const balloons: BalloonSprite[] = [];
+  let nextBalloonSpawnMs = 0;
+  let pickupsCollected = 0;
 
   // Active mode — enemy + player missiles
   let enemyG: Graphics | null = null;
@@ -94,6 +101,11 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
   let activeHits = 0;
   let activeMisses = 0;
   let canFire = true;
+
+  // Active mode — drift
+  let enemyDriftTarget = -1;
+  let enemyDriftStartY = 0;
+  let enemyDriftStartMs = 0;
 
   // HUD overlay for lives / score
   const hudG = new Graphics();

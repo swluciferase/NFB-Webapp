@@ -160,10 +160,10 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
   // ── HUD drawing ────────────────────────────────────────────────────────────
 
   function drawFuelHud() {
-    hudG.clear();
     if (runIndex < 0) return;
     if (modeId === 'active') return;   // active mode uses its own aim HUD
 
+    hudG.clear();
     const barrelR = 9;
     const spacing = 24;
     const startX = 20;
@@ -178,6 +178,16 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       hudG.rect(cx - barrelR + 2, cy - barrelR, (barrelR - 2) * 2, 2);
       hudG.fill({ color: full ? 0xffc966 : 0x445566 });
     }
+  }
+
+  function drawActiveHud() {
+    if (modeId !== 'active' || runIndex < 0 || !scene) return;
+    hudG.clear();
+    const px = scene.plane.x;
+    const py = scene.plane.y + aimOffset;
+    hudG.moveTo(px + 20, py).lineTo(px + 80, py);
+    hudG.stroke({ color: 0xffaa00, width: 2, alpha: 0.7 });
+    hudG.circle(px + 20, py, 4).fill({ color: 0xffaa00, alpha: 0.9 });
   }
 
   // ── Tick helper: spawn + animate incoming missiles (alternating mode) ─────
@@ -439,15 +449,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
 
     emitStats(h);
     drawFuelHud();
-    // Active mode aim indicator
-    if (modeId === 'active' && runIndex >= 0 && scene) {
-      hudG.clear();
-      const px = scene.plane.x;
-      const py = scene.plane.y + aimOffset;
-      hudG.moveTo(px + 20, py).lineTo(px + 80, py);
-      hudG.stroke({ color: 0xffaa00, width: 2, alpha: 0.7 });
-      hudG.circle(px + 20, py, 4).fill({ color: 0xffaa00, alpha: 0.9 });
-    }
+    drawActiveHud();
 
     if (elapsedMs >= RUN_DURATION_MS && finishCb && runIndex >= 0) {
       const gameSpecific: Record<string, number | boolean> =

@@ -6,10 +6,10 @@ export const GAME_PROTOCOL_VERSION = 1;
 export type GameChannelMessage =
   // main → subject
   | { kind: 'hello';          sessionId: string; protocolVersion: number }
-  | { kind: 'loadGame';       gameId: GameId; modeId: string; themeId: Theme['id']; lang: Lang }
+  | { kind: 'loadGame';       gameId: GameId; modeId: string; themeId: Theme['id']; lang: Lang; plannedInnings?: number; plannedCoveragePct?: number; patternId?: string; noFeedback?: boolean; dualTeamA?: string; dualTeamB?: string }
   | { kind: 'preview' }
   | { kind: 'runStart';       runIndex: number; runDurationSec: number; startedAt: number }
-  | { kind: 'oo';             t: number; oo: number; ta: number }
+  | { kind: 'rl';             t: number; rl: number; ta: number }
   | { kind: 'pause' }
   | { kind: 'resume' }
   | { kind: 'runForceEnd' }

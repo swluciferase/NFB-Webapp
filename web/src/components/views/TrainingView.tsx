@@ -10,6 +10,7 @@ import {
   type NfbSettings,
   type NfbIndicatorSetting,
 } from '../../services/nfbSettingsStore';
+import { nfbLiveStore } from '../../services/nfbLiveStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1165,9 +1166,28 @@ export interface TrainingViewProps {
   hidden?: boolean;
   lang?: Lang;
   onSessionTick?: (stats: TrainingSessionStats) => void;
+  /** Shared feedback file (selected in 回饋 page; overlay reads it here). */
+  feedbackFile?: File | null;
+  setFeedbackFile?: (f: File | null) => void;
+  /** Shared feedback URL (entered in 回饋 page; overlay reads it here). */
+  feedbackUrl?: string;
+  setFeedbackUrl?: (u: string) => void;
+  /** Called just before NFB session starts — triggers the game start if ready. */
+  onBeforeStart?: () => void;
+  /**
+   * Incremented by App when the user clicks "開啟受測者視窗" with classic
+   * feedback selected. TrainingView reacts by opening the feedback window so
+   * the overlay starts updating even before the NFB session begins.
+   */
+  classicOpenTrigger?: number;
 }
 
-export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hidden, lang, onSessionTick }) => {
+export const TrainingView: FC<TrainingViewProps> = ({
+  packets, filterParams, hidden, lang, onSessionTick,
+  feedbackFile: propFeedbackFile, setFeedbackFile: propSetFeedbackFile,
+  feedbackUrl: propFeedbackUrl, setFeedbackUrl: propSetFeedbackUrl,
+  onBeforeStart, classicOpenTrigger,
+}) => {
   const liveBandPower = useBandPower(packets, filterParams ?? DEFAULT_FILTER_PARAMS);
   // Ref for stale-closure-safe access inside tick
   const liveBandPowerRef = useRef(liveBandPower);
@@ -1227,8 +1247,15 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   const [sessionDuration, setSessionDuration] = useState(0);
   const [targetAchievementPct, setTargetAchievementPct] = useState(0);
   const [rewardRate, setRewardRate] = useState(0);
-  const [feedbackUrl, setFeedbackUrl] = useState('');
-  const [feedbackFile, setFeedbackFile] = useState<File | null>(null);
+  // feedbackUrl / feedbackFile are shared with the 回饋 page via App.tsx props.
+  // Fall back to local state when the parent doesn't provide them (e.g. standalone usage).
+  const [localFeedbackUrl, setLocalFeedbackUrl] = useState('');
+  const [localFeedbackFile, setLocalFeedbackFile] = useState<File | null>(null);
+  const feedbackUrl  = propFeedbackUrl  ?? localFeedbackUrl;
+  const setFeedbackUrl  = propSetFeedbackUrl  ?? setLocalFeedbackUrl;
+  const feedbackFile = propFeedbackFile ?? localFeedbackFile;
+  const setFeedbackFile = propSetFeedbackFile ?? setLocalFeedbackFile;
+
   const [operatorNotes, setOperatorNotes] = useState('');
   const [overallScore, setOverallScore] = useState(0);
   const [overlayOpacity, setOverlayOpacity] = useState(0);
@@ -1249,9 +1276,9 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
 
   const feedbackWindowRef = useRef<Window | null>(null);
   const feedbackFileRef = useRef<File | null>(null);
-  const videoInputRef = useRef<HTMLInputElement | null>(null);
-  const pptxInputRef  = useRef<HTMLInputElement | null>(null);
-  const pdfInputRef   = useRef<HTMLInputElement | null>(null);
+
+  // Track whether the classic feedback window is open (so OO overlay runs before session starts)
+  const [classicWindowOpen, setClassicWindowOpen] = useState(false);
 
   // ── Baseline recording ──
   const [baselinePhase, setBaselinePhase] = useState<'idle' | 'recording' | 'done'>('idle');
@@ -1281,16 +1308,18 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
   }, [sendToFeedbackWindow]);
 
   // Auto-compute overlay opacity from TA: OO = K * sqrt(TA), clamped 0–100
-  // Runs always so dashboard shows live OO; applyOverlay only affects feedback window (no-op when closed)
+  // Runs always so dashboard shows live OO; applyOverlay only affects feedback window (no-op when closed).
+  // Also applies overlay when the classic window is open pre-session (user wants OO live from window open).
   useEffect(() => {
     const k = K_VALUES[difficultyLevel - 1]!;
     const oo = Math.max(0, Math.min(100, Math.round(k * Math.sqrt(targetAchievementPct))));
     setOverlayOpacity(oo);
-    if (sessionRunning) {
+    nfbLiveStore.publish({ rl: oo, ta: targetAchievementPct });
+    if (sessionRunning || classicWindowOpen) {
       applyOverlay(oo);
-      if (nfbAudioElRef.current) nfbAudioElRef.current.volume = oo / 100;
+      if (sessionRunning && nfbAudioElRef.current) nfbAudioElRef.current.volume = oo / 100;
     }
-  }, [targetAchievementPct, difficultyLevel, sessionRunning, applyOverlay]);
+  }, [targetAchievementPct, difficultyLevel, sessionRunning, classicWindowOpen, applyOverlay]);
 
   // Lookup live band power via ref (avoids stale closure)
   const getLiveBandPower = useCallback((channel: Channel, band: Band): number | null => {
@@ -1612,13 +1641,33 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
     setRewardRate(0);
     setOverallScore(0);
     setSessionRunning(true);
+    // Also start the game session if one is configured in the 回饋 page
+    onBeforeStart?.();
+    // Skip re-opening the window if it was already opened via "開啟受測者視窗"
+    if (feedbackWindowRef.current && !feedbackWindowRef.current.closed) return;
     const file = feedbackFileRef.current;
     if (file) {
       openFeedbackWindowWithFile(file);
     } else if (feedbackUrl.trim()) {
       openFeedbackWindow(feedbackUrl.trim());
     }
-  }, [feedbackUrl, openFeedbackWindow, openFeedbackWindowWithFile]);
+  }, [feedbackUrl, onBeforeStart, openFeedbackWindow, openFeedbackWindowWithFile]);
+
+  // Open classic feedback window when "開啟受測者視窗" is clicked with classic selected.
+  // The trigger is incremented by App.tsx when GameControlView's open button is pressed.
+  useEffect(() => {
+    if (!classicOpenTrigger) return;
+    const file = feedbackFileRef.current;
+    if (file) {
+      openFeedbackWindowWithFile(file);
+    } else if (feedbackUrl.trim()) {
+      openFeedbackWindow(feedbackUrl.trim());
+    } else {
+      return; // nothing to open
+    }
+    setClassicWindowOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classicOpenTrigger]);
 
   // NFB audio: start/stop with session
   useEffect(() => {
@@ -1763,7 +1812,7 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
                 { label: T(lang ?? 'zh', 'trainDuration'), value: formatDuration(sessionDuration) },
                 { label: T(lang ?? 'zh', 'trainTA'), value: `${targetAchievementPct}%` },
                 { label: T(lang ?? 'zh', 'trainRR'), value: `${rewardRate}%` },
-                { label: T(lang ?? 'zh', 'trainOO'), value: `${overlayOpacity}%` },
+                { label: T(lang ?? 'zh', 'trainRL'), value: `${overlayOpacity}%` },
               ].map(item => (
                 <div key={item.label} style={{ background: 'var(--bg-tertiary)', borderRadius: 7, padding: '7px 10px', textAlign: 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--text)', marginBottom: 2, letterSpacing: '.04em' }}>{item.label}</div>
@@ -1852,43 +1901,13 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
           )}
         </div>
 
-        {/* Feedback content */}
+        {/* Feedback content (overlay + audio; file/URL selection is in 回饋 page) */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>{T(lang ?? 'zh', 'trainFeedbackContent')}</div>
-          <input type="url" placeholder={T(lang ?? 'zh', 'trainFeedbackUrlPlaceholder')}
-            value={feedbackUrl} onChange={e => { setFeedbackUrl(e.target.value); setFeedbackFile(null); feedbackFileRef.current = null; }}
-            style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '6px 8px', marginBottom: 6, boxSizing: 'border-box' }} />
-          {/* Hidden file inputs */}
-          <input ref={videoInputRef} type="file" accept="video/*" style={{ display: 'none' }}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) { setFeedbackFile(f); setFeedbackUrl(''); } e.target.value = ''; }} />
-          <input ref={pptxInputRef} type="file" accept=".pptx" style={{ display: 'none' }}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) { setFeedbackFile(f); setFeedbackUrl(''); } e.target.value = ''; }} />
-          <input ref={pdfInputRef} type="file" accept=".pdf" style={{ display: 'none' }}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) { setFeedbackFile(f); setFeedbackUrl(''); } e.target.value = ''; }} />
-          {/* File picker buttons */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-            {(['video', 'pptx', 'pdf'] as const).map((type) => {
-              const labels: Record<string, string> = { video: T(lang ?? 'zh', 'trainVideoBtn'), pptx: T(lang ?? 'zh', 'trainSlideBtn'), pdf: T(lang ?? 'zh', 'trainPdfBtn') };
-              const refs: Record<string, React.RefObject<HTMLInputElement | null>> = { video: videoInputRef, pptx: pptxInputRef, pdf: pdfInputRef };
-              const isSelected = feedbackFile && (
-                type === 'pdf' ? feedbackFile.name.toLowerCase().endsWith('.pdf')
-                : type === 'pptx' ? feedbackFile.name.toLowerCase().endsWith('.pptx')
-                : !feedbackFile.name.toLowerCase().endsWith('.pdf') && !feedbackFile.name.toLowerCase().endsWith('.pptx')
-              );
-              return (
-                <button key={type} onClick={() => refs[type].current?.click()} style={{
-                  flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                  border: `1px solid ${isSelected ? 'rgba(88,166,255,0.6)' : 'var(--border)'}`,
-                  background: isSelected ? 'rgba(88,166,255,0.15)' : 'var(--bg-secondary)',
-                  color: isSelected ? '#58a6ff' : 'var(--text-secondary)',
-                }}>{labels[type]}</button>
-              );
-            })}
-          </div>
-          {feedbackFile && (
-            <div style={{ fontSize: 10, color: 'rgba(88,166,255,0.7)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '85%' }}>{feedbackFile.name}</span>
-              <button onClick={() => { setFeedbackFile(null); feedbackFileRef.current = null; }} style={{ background: 'none', border: 'none', color: 'rgba(248,81,73,0.7)', cursor: 'pointer', fontSize: 12, padding: '0 2px' }}>✕</button>
+          {/* Show active file/URL name (set on 回饋 page) */}
+          {(feedbackFile || feedbackUrl.trim()) && (
+            <div style={{ fontSize: 10, color: 'rgba(88,166,255,0.7)', marginBottom: 8 }}>
+              {feedbackFile ? feedbackFile.name : feedbackUrl.trim()}
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-tertiary)', borderRadius: 6, padding: '6px 10px', marginBottom: 10 }}>
@@ -1960,10 +1979,10 @@ export const TrainingView: FC<TrainingViewProps> = ({ packets, filterParams, hid
                   ? 'rgba(248,129,74,0.25)'
                   : baselinePhase === 'done'
                     ? 'rgba(63,185,80,0.25)'
-                    : 'rgba(93,109,134,0.3)',
-                color: baselinePhase === 'recording' ? 'rgba(248,129,74,0.9)' : baselinePhase === 'done' ? '#3fb950' : 'var(--text-secondary)',
+                    : 'rgba(120,88,200,0.22)',
+                color: baselinePhase === 'recording' ? 'rgba(248,129,74,0.9)' : baselinePhase === 'done' ? '#3fb950' : 'rgba(180,150,255,0.9)',
                 fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
-                border: `1px solid ${baselinePhase === 'recording' ? 'rgba(248,129,74,0.4)' : baselinePhase === 'done' ? 'rgba(63,185,80,0.4)' : 'var(--border)'}`,
+                border: `1px solid ${baselinePhase === 'recording' ? 'rgba(248,129,74,0.4)' : baselinePhase === 'done' ? 'rgba(63,185,80,0.4)' : 'rgba(140,100,220,0.45)'}`,
               }}
             >
               {baselinePhase === 'recording'

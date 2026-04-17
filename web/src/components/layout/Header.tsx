@@ -14,7 +14,7 @@ const TAB_LABELS: Record<PageType, { zh: string; en: string }> = {
   ci:       { zh: '連線 · 記錄', en: 'Connect · Record' },
   signal:   { zh: '訊號 · 頻譜', en: 'Signal · FFT'     },
   training: { zh: '訓練',        en: 'Training'          },
-  games:    { zh: '遊戲訓練',    en: 'Games'             },
+  games:    { zh: '回饋',         en: 'Feedback'          },
 };
 
 export const Header: FC<HeaderProps> = ({

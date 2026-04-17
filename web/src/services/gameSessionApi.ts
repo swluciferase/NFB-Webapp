@@ -47,7 +47,7 @@ async function putResult(
 }
 
 function reportToCsv(report: SessionReport): string {
-  // Run-by-run table; raw ooSeries omitted to stay under the 50 MB limit.
+  // Run-by-run table; raw rlSeries omitted to stay under the 50 MB limit.
   const header = ['runIndex', 'startedAt', 'durationMs', 'qualityPercent', 'isValid'].join(',');
   const rows = report.runs.map((r) =>
     [r.runIndex, r.startedAt, r.durationMs, r.qualityPercent, r.isValid].join(','),

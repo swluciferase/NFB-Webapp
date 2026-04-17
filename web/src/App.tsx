@@ -135,6 +135,15 @@ function App() {
     id: '', name: '', dob: '', sex: '', notes: '',
   });
 
+  // ── Shared feedback state (selected in 回饋 page, used by TrainingView overlay) ──
+  const [feedbackUrl, setFeedbackUrl] = useState('');
+  const [feedbackFile, setFeedbackFile] = useState<File | null>(null);
+  // Start-game function exposed by GameControlView; called from TrainingView's start button
+  const [gameStartFn, setGameStartFn] = useState<(() => void) | null>(null);
+  // Trigger for TrainingView to open the classic feedback window when
+  // "開啟受測者視窗" is clicked while classic feedback is selected.
+  const [classicOpenTrigger, setClassicOpenTrigger] = useState(0);
+
   // ── Recording state ──
   const [isRecording, setIsRecording] = useState(false);
   const [trainingStats, setTrainingStats] = useState<TrainingSessionStats | null>(null);
@@ -670,6 +679,12 @@ function App() {
             hidden={activePage !== 'training'}
             lang={lang}
             onSessionTick={setTrainingStats}
+            feedbackUrl={feedbackUrl}
+            setFeedbackUrl={setFeedbackUrl}
+            feedbackFile={feedbackFile}
+            setFeedbackFile={setFeedbackFile}
+            onBeforeStart={gameStartFn ?? undefined}
+            classicOpenTrigger={classicOpenTrigger}
           />
         </div>
 
@@ -685,6 +700,12 @@ function App() {
             hidden={activePage !== 'games'}
             lang={lang}
             isConnected={isConnected}
+            feedbackUrl={feedbackUrl}
+            setFeedbackUrl={setFeedbackUrl}
+            feedbackFile={feedbackFile}
+            setFeedbackFile={setFeedbackFile}
+            onGameStartable={(fn) => setGameStartFn(() => fn)}
+            onOpenClassicWindow={() => setClassicOpenTrigger((n) => n + 1)}
           />
         </div>
       </div>

@@ -61,8 +61,18 @@ export const SessionReportView: FC<SessionReportViewProps> = ({ lang, report, on
           value={`${report.gameId} · ${report.gameMode}`}
         />
         <ReportRow
-          label={T(lang, 'gameReportPlanned')}
-          value={`${report.plannedDurationSec}s`}
+          label={
+            report.plannedCoveragePct != null
+              ? T(lang, 'gameReportTarget')
+              : T(lang, 'gameReportPlanned')
+          }
+          value={
+            report.plannedCoveragePct != null
+              ? `${report.plannedCoveragePct}%`
+              : report.plannedInnings != null
+                ? `${report.plannedInnings} ${T(lang, report.plannedInnings === 1 ? 'gameInningSingular' : 'gameInningPlural')}`
+                : `${report.plannedDurationSec ?? 0}s`
+          }
         />
         <ReportRow
           label={T(lang, 'gameReportActual')}
@@ -72,7 +82,7 @@ export const SessionReportView: FC<SessionReportViewProps> = ({ lang, report, on
           label={T(lang, 'gameReportRuns')}
           value={`${report.runs.length} (${report.validRunsCount} valid)`}
         />
-        <ReportRow label={T(lang, 'gameReportAvgOO')} value={`${Math.round(report.avgOO)}%`} />
+        <ReportRow label={T(lang, 'gameReportAvgRL')} value={`${Math.round(report.avgRL)}%`} />
       </div>
 
       <div style={{ marginBottom: 16, fontSize: 12, color: 'rgba(200,215,235,0.6)' }}>
@@ -114,9 +124,9 @@ function buildReportHtml(r: SessionReport): string {
 <ul>
 <li>Game: ${r.gameId} (${r.gameMode})</li>
 <li>Theme: ${r.themeId}</li>
-<li>Planned: ${r.plannedDurationSec}s · Actual: ${r.actualDurationSec}s</li>
+<li>Planned: ${r.plannedCoveragePct != null ? `${r.plannedCoveragePct}% target coverage` : r.plannedInnings != null ? `${r.plannedInnings} innings` : `${r.plannedDurationSec ?? 0}s`} · Actual: ${r.actualDurationSec}s</li>
 <li>Runs: ${r.runs.length} (valid ${r.validRunsCount})</li>
-<li>Avg OO: ${r.avgOO.toFixed(1)}%</li>
+<li>Avg Reward Level: ${r.avgRL.toFixed(1)}%</li>
 </ul>
 </body></html>`;
 }

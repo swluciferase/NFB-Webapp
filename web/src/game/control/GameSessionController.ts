@@ -22,7 +22,15 @@ export interface GameSessionControllerOptions {
 type Listener = () => void;
 
 const DEFAULT_HEARTBEAT_TIMEOUT = 5000;
-const RUN_DURATION_SEC = 90;
+const RUN_DURATION_SEC_PLANE = 90;
+const RUN_DURATION_SEC_BASEBALL = 162; // 9 pitches × 18s (5 prep + 10 charge + 3 post)
+const RUN_DURATION_SEC_ZENTANGLE = 180;
+
+function runDurationFor(gameId: string): number {
+  if (gameId === 'baseball') return RUN_DURATION_SEC_BASEBALL;
+  if (gameId === 'zentangle') return RUN_DURATION_SEC_ZENTANGLE;
+  return RUN_DURATION_SEC_PLANE;
+}
 
 function uid(): string {
   return `gs_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -88,6 +96,12 @@ export class GameSessionController {
       modeId: cfg.modeId,
       themeId: cfg.themeId,
       lang: cfg.lang,
+      plannedInnings: cfg.plannedInnings,
+      plannedCoveragePct: cfg.plannedCoveragePct,
+      patternId:  cfg.patternId,
+      noFeedback: cfg.noFeedback,
+      dualTeamA: cfg.dualTeamA,
+      dualTeamB: cfg.dualTeamB,
     });
   }
 
@@ -103,6 +117,12 @@ export class GameSessionController {
       modeId: cfg.modeId,
       themeId: cfg.themeId,
       lang: cfg.lang,
+      plannedInnings: cfg.plannedInnings,
+      plannedCoveragePct: cfg.plannedCoveragePct,
+      patternId:  cfg.patternId,
+      noFeedback: cfg.noFeedback,
+      dualTeamA: cfg.dualTeamA,
+      dualTeamB: cfg.dualTeamB,
     });
   }
 
@@ -123,7 +143,7 @@ export class GameSessionController {
     this.channel.post({
       kind: 'runStart',
       runIndex: this.runIndex,
-      runDurationSec: RUN_DURATION_SEC,
+      runDurationSec: runDurationFor(this.config.gameId),
       startedAt: this.runStartedAt,
     });
     this.transition('runActive');
@@ -153,12 +173,12 @@ export class GameSessionController {
     const endedAt = this.clock();
     const actual = Math.floor((endedAt - this.sessionStartedAt - this.sessionPausedMs) / 1000);
     const validRuns = this.runs.filter((r) => r.isValid);
-    const avgOO = validRuns.length === 0
+    const avgRL = validRuns.length === 0
       ? 0
       : validRuns.reduce((sum, r) => {
-          const mean = r.ooSeries.length === 0
+          const mean = r.rlSeries.length === 0
             ? 0
-            : r.ooSeries.reduce((a, b) => a + b, 0) / r.ooSeries.length;
+            : r.rlSeries.reduce((a, b) => a + b, 0) / r.rlSeries.length;
           return sum + mean;
         }, 0) / validRuns.length;
     return {
@@ -169,10 +189,12 @@ export class GameSessionController {
       startedAt: this.sessionStartedAt,
       endedAt,
       plannedDurationSec: this.config!.plannedDurationSec,
+      plannedInnings: this.config!.plannedInnings,
+      plannedCoveragePct: this.config!.plannedCoveragePct,
       actualDurationSec: actual,
       runs: this.runs,
       validRunsCount: validRuns.length,
-      avgOO,
+      avgRL,
       nfbSettingsSnapshot: nfbSettingsStore.read(),
     };
   }
@@ -186,6 +208,12 @@ export class GameSessionController {
           modeId: this.config.modeId,
           themeId: this.config.themeId,
           lang: this.config.lang,
+          plannedInnings: this.config.plannedInnings,
+          plannedCoveragePct: this.config.plannedCoveragePct,
+          patternId: this.config.patternId,
+          noFeedback: this.config.noFeedback,
+          dualTeamA: this.config.dualTeamA,
+          dualTeamB: this.config.dualTeamB,
         });
       }
       if (this.state === 'connecting') this.transition('preview');
@@ -199,13 +227,36 @@ export class GameSessionController {
     }
     if (m.kind === 'runResult') {
       this.runs.push(m.result);
-      const elapsed = Math.floor((this.clock() - this.sessionStartedAt - this.sessionPausedMs) / 1000);
-      if (this.config && elapsed >= this.config.plannedDurationSec) {
-        this.channel.post({ kind: 'sessionEnd' });
-        this.transition('sessionReport');
-      } else {
-        this.transition('runRest');
+      // Baseball terminates on inning count; plane terminates on elapsed
+      // time. Both conditions trigger session end if met.
+      if (this.config) {
+        // Dual mode needs 2× half-innings (top + bottom for each inning).
+        const plannedRuns = this.config.plannedInnings != null
+          ? this.config.modeId === 'dual'
+            ? this.config.plannedInnings * 2
+            : this.config.plannedInnings
+          : null;
+        const endOnInnings = plannedRuns != null && this.runs.length >= plannedRuns;
+        // ZenTangle: one run per session — the run itself ends when the
+        // target coverage is reached, no wall-clock cap.
+        const endOnCoverage =
+          this.config.plannedCoveragePct != null &&
+          this.runs.length >= 1;
+        const elapsed = Math.floor(
+          (this.clock() - this.sessionStartedAt - this.sessionPausedMs) / 1000,
+        );
+        const endOnTime =
+          this.config.plannedInnings == null &&
+          this.config.plannedCoveragePct == null &&
+          this.config.plannedDurationSec != null &&
+          elapsed >= this.config.plannedDurationSec;
+        if (endOnInnings || endOnCoverage || endOnTime) {
+          this.channel.post({ kind: 'sessionEnd' });
+          this.transition('sessionReport');
+          return;
+        }
       }
+      this.transition('runRest');
       return;
     }
     if (m.kind === 'subjectClosing') {

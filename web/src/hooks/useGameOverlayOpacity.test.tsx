@@ -24,9 +24,9 @@ describe('useGameOverlayOpacity', () => {
     return { Fz_Beta: fzBeta };
   }
 
-  it('starts at oo=0 with no data', () => {
+  it('starts at rl=0 with no data', () => {
     const { result } = renderHook(() => useGameOverlayOpacity(null));
-    expect(result.current.oo).toBe(0);
+    expect(result.current.rl).toBe(0);
     expect(result.current.ta).toBe(0);
     expect(result.current.isActive).toBe(true);
   });
@@ -45,8 +45,8 @@ describe('useGameOverlayOpacity', () => {
       rerender({ m: metrics(20) });
     }
     expect(result.current.ta).toBe(100);
-    // K[2] = 12.70, OO = 12.70 * sqrt(100) = 127 → clamped to 100
-    expect(result.current.oo).toBe(100);
+    // K[2] = 12.70, RL = 12.70 * sqrt(100) = 127 → clamped to 100
+    expect(result.current.rl).toBe(100);
   });
 
   it('drops to 0 when metrics fail', () => {
@@ -62,7 +62,7 @@ describe('useGameOverlayOpacity', () => {
       rerender({ m: metrics(5) });
     }
     expect(result.current.ta).toBe(0);
-    expect(result.current.oo).toBe(0);
+    expect(result.current.rl).toBe(0);
   });
 
   it('exposes a resetSession handle that clears accumulation', () => {
@@ -75,7 +75,7 @@ describe('useGameOverlayOpacity', () => {
       rerender({ m: metrics(20) });
     }
     act(() => result.current.resetSession());
-    expect(result.current.oo).toBe(0);
+    expect(result.current.rl).toBe(0);
     expect(result.current.ta).toBe(0);
   });
 });

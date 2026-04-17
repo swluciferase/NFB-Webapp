@@ -6,7 +6,7 @@ export interface TherapistHudProps {
   lang: Lang;
   controller: GameSessionController;
   controllerState: ControllerState;
-  oo: number;
+  rl: number;
   ta: number;
   onReportComplete: () => void;
 }
@@ -15,7 +15,7 @@ export const TherapistHud: FC<TherapistHudProps> = ({
   lang,
   controller,
   controllerState,
-  oo,
+  rl,
   ta,
   onReportComplete,
 }) => {
@@ -33,7 +33,7 @@ export const TherapistHud: FC<TherapistHudProps> = ({
           marginBottom: 20,
         }}
       >
-        <Stat label={T(lang, 'gameHudOO')} value={`${Math.round(oo)}%`} />
+        <Stat label={T(lang, 'gameHudRL')} value={`${Math.round(rl)}%`} />
         <Stat label={T(lang, 'gameHudTA')} value={`${Math.round(ta)}%`} />
         <Stat label={T(lang, 'gameHudRuns')} value={`${controller.runs.length}`} />
         <Stat label={T(lang, 'gameHudState')} value={controllerState} />

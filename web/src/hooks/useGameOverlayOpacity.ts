@@ -1,18 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  K_VALUES,
-  W_VALUES,
-  computeTA,
-  computeOO,
-  computeTickBool,
-} from '../utils/nfbFormulas';
-import {
-  nfbSettingsStore,
-  type NfbSettings,
-} from '../services/nfbSettingsStore';
+import { useCallback, useEffect, useState } from 'react';
+import { nfbLiveStore, type NfbLiveSnapshot } from '../services/nfbLiveStore';
+import { nfbSettingsStore, type NfbSettings } from '../services/nfbSettingsStore';
 
 export interface GameOverlayOpacity {
-  oo: number;
+  rl: number;
   ta: number;
   tick: boolean;
   isActive: boolean;
@@ -20,66 +11,32 @@ export interface GameOverlayOpacity {
 }
 
 /**
- * Build a flat Record<string,number> of all metrics the NFB settings might
- * reference. For M1 only Fz_Beta / Fz_Theta are surfaced; extend as new
- * metrics come online.
+ * Reads live OO/TA published by TrainingView's NFB pipeline. GameControlView
+ * cannot re-derive these itself because the real indicator formulas live in
+ * TrainingView's state (custom formulas, thresholds, AND/Average modes) —
+ * mirroring that logic would drift. TrainingView is the single source of
+ * truth; this hook just subscribes.
  */
-function buildMetricMap(metrics: Record<string, number> | null): Record<string, number> {
-  return metrics ?? {};
-}
-
 export function useGameOverlayOpacity(
-  metrics: Record<string, number> | null,
+  _metrics: Record<string, number> | null,
 ): GameOverlayOpacity {
+  const [snapshot, setSnapshot] = useState<NfbLiveSnapshot>(() => nfbLiveStore.read());
   const [settings, setSettings] = useState<NfbSettings>(() => nfbSettingsStore.read());
-  const settingsRef = useRef(settings);
-  useEffect(() => { settingsRef.current = settings; }, [settings]);
 
+  useEffect(() => nfbLiveStore.subscribe(setSnapshot), []);
   useEffect(() => nfbSettingsStore.subscribe(setSettings), []);
 
-  const taWindowRef = useRef<boolean[]>([]);
-  const [tick, setTick] = useState(false);
-  const [ta, setTa] = useState(0);
-  const [oo, setOo] = useState(0);
-
-  const metricsRef = useRef<Record<string, number>>(buildMetricMap(metrics));
-  useEffect(() => {
-    metricsRef.current = buildMetricMap(metrics);
-  }, [metrics]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      const s = settingsRef.current;
-      const enabled = s.indicators.filter((i) => i.enabled);
-      const thisTick = computeTickBool(enabled, metricsRef.current);
-      const W = W_VALUES[s.persistenceLevel - 1]!;
-      const nextWindow = [...taWindowRef.current, thisTick];
-      if (nextWindow.length > W) nextWindow.shift();
-      taWindowRef.current = nextWindow;
-      const nextTa = computeTA(nextWindow);
-      const nextOo = computeOO(nextTa, s.difficultyLevel);
-      setTick(thisTick);
-      setTa(nextTa);
-      setOo(nextOo);
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
   const resetSession = useCallback(() => {
-    taWindowRef.current = [];
-    setTick(false);
-    setTa(0);
-    setOo(0);
+    // TrainingView owns the session window; nothing to reset here.
   }, []);
 
-  const isActive = useMemo(
-    () => settings.indicators.some((i) => i.enabled),
-    [settings],
-  );
+  const isActive = settings.indicators.some((i) => i.enabled);
 
-  // Silence unused-import warning (K_VALUES is used indirectly via computeOO;
-  // keep a reference so future refactors notice this dependency).
-  void K_VALUES;
-
-  return { oo, ta, tick, isActive, resetSession };
+  return {
+    rl: snapshot.rl,
+    ta: snapshot.ta,
+    tick: snapshot.rl > 0,
+    isActive,
+    resetSession,
+  };
 }

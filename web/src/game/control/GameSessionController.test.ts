@@ -20,7 +20,7 @@ function cfg(): SessionConfig {
   return {
     gameId: 'plane',
     modeId: 'auto',
-    themeId: 'papercut',
+    themeId: 'day',
     lang: 'zh',
     plannedDurationSec: 300,
   };
@@ -90,7 +90,7 @@ describe('GameSessionController', () => {
       kind: 'runResult',
       runIndex: 0,
       result: {
-        runIndex: 0, startedAt: 0, durationMs: 60000, ooSeries: [],
+        runIndex: 0, startedAt: 0, durationMs: 60000, rlSeries: [],
         qualityPercent: 80, isValid: true, gameSpecific: {},
       },
     });
@@ -137,7 +137,7 @@ describe('GameSessionController', () => {
       kind: 'runResult',
       runIndex: 0,
       result: {
-        runIndex: 0, startedAt: 0, durationMs: 90000, ooSeries: [],
+        runIndex: 0, startedAt: 0, durationMs: 90000, rlSeries: [],
         qualityPercent: 80, isValid: true, gameSpecific: {},
       },
     });

@@ -373,6 +373,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
           };
           const cb = finishCb;
           finishCb = null;
+          runIndex = -1;
           cb?.(result);
           return;
         }
@@ -511,6 +512,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       flickerUntilMs = 0;
       planeVelY = 0;
       groundBounceVel = 0;
+      if (scene) scene.plane.alpha = 1;
       altScore = 0;
       altMisses = 0;
       activeHits = 0;

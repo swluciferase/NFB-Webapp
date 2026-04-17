@@ -94,8 +94,6 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
   // Active mode — enemy + player missiles
   let enemyG: Graphics | null = null;
   let enemyY = app.screen.height * 0.5;
-  let enemyTargetY = app.screen.height * 0.5;
-  let lastEnemyMove = 0;
   let playerMissile: PlayerMissile | null = null;
   let aimOffset = 0;
   let activeHits = 0;
@@ -131,7 +129,6 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     enemyG.alpha = 0.9;
     scene?.trailLayer.addChild(enemyG);
     enemyY = app.screen.height * 0.5;
-    enemyTargetY = app.screen.height * 0.5;
     if (enemyG) {
       enemyG.x = app.screen.width * ENEMY_X_FRACTION;
       enemyG.y = enemyY;
@@ -290,17 +287,25 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
 
   // ── Tick helper: enemy + player missiles (active mode) ────────────────────
 
+  function startEnemyDrift(skyY: number, groundY: number, now: number) {
+    enemyDriftStartY = enemyY;
+    enemyDriftTarget = skyY + Math.random() * (groundY - skyY);
+    enemyDriftStartMs = now;
+  }
+
   function tickActive(now: number, w: number, h: number, dt: number) {
     if (!scene || !enemyG) return;
     const skyY = h * 0.22;
     const groundY = h * 0.78;
 
-    // Enemy plane drifts toward target
-    if (now - lastEnemyMove > ENEMY_MOVE_INTERVAL_MS) {
-      enemyTargetY = skyY + Math.random() * (groundY - skyY);
-      lastEnemyMove = now;
+    // Smooth drift animation when missile missed
+    if (enemyDriftTarget >= 0) {
+      const elapsed = now - enemyDriftStartMs;
+      const t = Math.min(1, elapsed / ENEMY_DRIFT_MS);
+      const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      enemyY = enemyDriftStartY + (enemyDriftTarget - enemyDriftStartY) * ease;
+      if (t >= 1) { enemyY = enemyDriftTarget; enemyDriftTarget = -1; }
     }
-    enemyY += (enemyTargetY - enemyY) * 0.02 * dt;
     enemyG.y = enemyY;
     enemyG.x = w * ENEMY_X_FRACTION;
 
@@ -310,35 +315,31 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       pm.x += MISSILE_FLY_SPEED * dt;
       pm.g.x = pm.x;
 
-      // Gradually home toward targetY
-      pm.y += (pm.targetY - pm.y) * 0.06 * dt;
-      pm.g.y = pm.y;
-
-      // Hit check
       const enemyX = enemyG.x;
+      // Hit zone: missile x overlaps enemy x band
       if (pm.x >= enemyX - 20 && pm.x <= enemyX + 40) {
         if (Math.abs(pm.y - enemyY) < 36) {
-          // Hit!
+          // Direct hit
           activeHits++;
-          // Flash enemy red
           enemyG.alpha = 0.3;
           setTimeout(() => { if (enemyG) enemyG.alpha = 0.9; }, 200);
-          // Respawn enemy
-          enemyTargetY = skyY + Math.random() * (groundY - skyY);
-          lastEnemyMove = now;
+          // Teleport enemy to new random Y instantly (no drift on hit)
+          enemyY = skyY + Math.random() * (groundY - skyY);
+          enemyDriftTarget = -1;
+          enemyG.y = enemyY;
         } else {
+          // Missile passed but wrong height — miss
           activeMisses++;
+          startEnemyDrift(skyY, groundY, now);
         }
-        // Destroy missile
         scene.trailLayer.removeChild(pm.g);
         pm.g.destroy();
         playerMissile = null;
         canFire = true;
-      }
-
-      // Off-screen right
-      if (pm.x > w + 40) {
+      } else if (pm.x > w + 40) {
+        // Off-screen — miss
         activeMisses++;
+        startEnemyDrift(skyY, groundY, now);
         scene.trailLayer.removeChild(pm.g);
         pm.g.destroy();
         playerMissile = null;
@@ -560,10 +561,9 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       activeMisses = 0;
       aimOffset = 0;
       canFire = true;
-      lastEnemyMove = performance.now();
+      enemyDriftTarget = -1;
       if (enemyG) {
         enemyY = app.screen.height * 0.5;
-        enemyTargetY = app.screen.height * 0.5;
         enemyG.y = enemyY;
       }
       if (playerMissile) {

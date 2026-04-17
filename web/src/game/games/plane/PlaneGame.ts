@@ -15,7 +15,7 @@ const TRAIL_LIFE_MS = 700;
 const TRAIL_SPAWN_INTERVAL_MS = 28;
 const MAX_TILT_RAD = 0.5;
 const PROP_BASE_RPS = 0.6;
-const SHAKE_OO_THRESHOLD = 70;
+const SHAKE_RL_THRESHOLD = 70;
 
 // Basic mode
 const BASIC_LIVES = 3;
@@ -60,7 +60,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
   stage.addChild(scene.root);
   scene.layout(app.screen.width, app.screen.height, true);
 
-  let oo = 0;
+  let rl = 0;
   let targetY = app.screen.height * 0.5;
   let runIndex = -1;
   let runStarted = 0;
@@ -306,7 +306,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     const now = performance.now();
     const dt = ticker.deltaTime;
 
-    const speed = 2 + 2 * (oo / 100);
+    const speed = 2 + 2 * (rl / 100);
 
     if (runIndex < 0) {
       scrollX += 0.6 * dt;
@@ -323,7 +323,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     // Vertical target from OO
     const groundY = h * 0.78;
     const skyY = h * 0.22;
-    targetY = skyY + (groundY - skyY) * (1 - oo / 100);
+    targetY = skyY + (groundY - skyY) * (1 - rl / 100);
 
     // ── Basic mode: apply vertical velocity + life loss on ground touch ──
     if (modeId === 'basic') {
@@ -331,7 +331,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
         planeVelY += groundBounceVel;
         groundBounceVel = 0;
       }
-      // Dampen vel, blend toward OO-target
+      // Dampen vel, blend toward OO-target (RL value)
       planeVelY *= 0.85;
       scene.plane.y += planeVelY * dt;
       scene.plane.y += (targetY - scene.plane.y) * 0.025 * dt;
@@ -377,9 +377,9 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     prevPlaneY = scene.plane.y;
 
     // Propeller
-    propAngle += (PROP_BASE_RPS + oo * 0.012) * dt;
+    propAngle += (PROP_BASE_RPS + rl * 0.012) * dt;
     scene.propHub.rotation = propAngle;
-    const propSquash = 0.35 + Math.max(0, 1 - oo * 0.008);
+    const propSquash = 0.35 + Math.max(0, 1 - rl * 0.008);
     scene.propHub.scale.x = Math.min(1, propSquash);
 
     // Exhaust particles
@@ -410,8 +410,8 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     }
 
     // Camera shake
-    if (oo > SHAKE_OO_THRESHOLD) {
-      const mag = (oo - SHAKE_OO_THRESHOLD) * 0.08;
+    if (rl > SHAKE_RL_THRESHOLD) {
+      const mag = (rl - SHAKE_RL_THRESHOLD) * 0.08;
       shakeX = (Math.random() - 0.5) * mag;
       shakeY = (Math.random() - 0.5) * mag;
     } else {
@@ -426,8 +426,8 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     // Telemetry
     const nowSec = Math.floor(elapsedMs / 1000);
     if (nowSec > lastAccumSec) {
-      rlSeries.push(oo);
-      if (oo >= 50) timeAboveMidSec++;
+      rlSeries.push(rl);
+      if (rl >= 50) timeAboveMidSec++;
       lastAccumSec = nowSec;
     }
 
@@ -461,7 +461,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     const frac = 1 - (scene.plane.y - topY) / Math.max(1, botY - topY);
     const altitudeM = Math.max(0, Math.round(120 + frac * 440));
     onStats({
-      rl: runIndex >= 0 ? Math.round(oo) : 0,
+      rl: runIndex >= 0 ? Math.round(rl) : 0,
       altitudeM,
       distanceM: Math.round(distanceM),
     });
@@ -522,10 +522,10 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       }
     },
     setRL(next) {
-      oo = Math.max(0, Math.min(100, next));
+      rl = Math.max(0, Math.min(100, next));
       const groundY = app.screen.height * 0.78;
       const skyY = app.screen.height * 0.22;
-      targetY = skyY + (groundY - skyY) * (1 - oo / 100);
+      targetY = skyY + (groundY - skyY) * (1 - rl / 100);
     },
     onInput(event: GameInputEvent) {
       if (runIndex < 0 || paused) return;

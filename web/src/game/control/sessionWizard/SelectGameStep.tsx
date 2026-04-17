@@ -136,16 +136,16 @@ const TRAINING_DESC: Record<CardDef['id'], { zh: string; en: string }> = {
 const MODE_DESC: Partial<Record<CardDef['id'], Record<string, { zh: string; en: string }>>> = {
   plane: {
     basic: {
-      zh: '飛機高度直接跟隨回饋值。回饋值越高，飛機飛得越高、越快。無需任何按鍵操作。',
-      en: 'Altitude follows Reward Level directly. Higher RL = greater height and speed. No key input required.',
+      zh: '回饋值越高，飛機飛得越高。飛機有 5 桶燃油；回饋值掉到 0 時飛機觸地會消耗 1 桶，並短暫閃爍（閃爍期間無敵）。燃油耗盡則提早結束。無需任何按鍵操作。',
+      en: 'Higher RL keeps the plane at altitude. The plane has 5 fuel barrels; when RL drops to 0 the plane hits the ground and loses 1 barrel with a brief flicker (invincible while flickering). Run ends when all fuel is gone. No key input required.',
     },
     alternating: {
-      zh: '每隔一段時間切換控制方向：奇數回合回饋值越高飛越高，偶數回合回饋值越低飛越高（放鬆訓練）。無需任何按鍵操作。',
-      en: 'Control direction alternates each run: odd runs reward high RL, even runs reward low RL (relaxation training). No key input required.',
+      zh: '畫面右側隨機高度飛來紅色或綠色氣球。紅氣球為障礙物——碰觸消耗 1 桶燃油；綠氣球為補給——碰觸補充 1 桶（燃油不足 3 桶時才會出現）。控制回饋值調整高度來閃避或收集。燃油耗盡則提早結束。',
+      en: 'Red and green balloons fly in from the right at random heights. Red balloons are obstacles — touching one costs 1 fuel barrel. Green balloons are pickups — touching one restores 1 barrel (only appear when fuel < 3). Control RL to dodge or collect. Run ends when all fuel is gone.',
     },
     active: {
-      zh: '按下 Space 鍵讓飛機衝刺加速（噴射推力），放開後恢復正常飛行。回饋值仍決定基本高度。',
-      en: 'Press Space to trigger a jet boost (burst of speed and lift). RL still controls base altitude.',
+      zh: '畫面右側隨機高度出現靜止敵機。按 Space 發射飛彈（一次一發）；上/下方向鍵可在 ±40px 範圍內微調瞄準線，需先靠回饋值把飛機移到接近敵機的高度。擊中敵機立即重生於新高度；飛彈落空則敵機緩慢漂移到新位置。',
+      en: 'A stationary enemy plane appears at a random height on the right. Press Space to fire a missile (one at a time); use Up/Down to fine-tune aim within ±40px — you must use RL to first bring the plane close to the enemy\'s altitude. A hit immediately respawns the enemy at a new height; a miss causes it to drift slowly to a new position.',
     },
   },
   baseball: {

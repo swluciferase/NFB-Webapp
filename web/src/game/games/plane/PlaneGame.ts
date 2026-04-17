@@ -48,7 +48,6 @@ interface PlayerMissile {
   g: Graphics;
   x: number;
   y: number;
-  targetY: number;
   active: boolean;
 }
 
@@ -99,6 +98,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
   let activeHits = 0;
   let activeMisses = 0;
   let canFire = true;
+  let enemyFlashUntilMs = 0;
 
   // Active mode — drift
   let enemyDriftTarget = -1;
@@ -298,6 +298,12 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     const skyY = h * 0.22;
     const groundY = h * 0.78;
 
+    // Restore enemy alpha after flash
+    if (enemyFlashUntilMs > 0 && now >= enemyFlashUntilMs) {
+      enemyG.alpha = 0.9;
+      enemyFlashUntilMs = 0;
+    }
+
     // Smooth drift animation when missile missed
     if (enemyDriftTarget >= 0) {
       const elapsed = now - enemyDriftStartMs;
@@ -322,7 +328,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
           // Direct hit
           activeHits++;
           enemyG.alpha = 0.3;
-          setTimeout(() => { if (enemyG) enemyG.alpha = 0.9; }, 200);
+          enemyFlashUntilMs = now + 200;
           // Teleport enemy to new random Y instantly (no drift on hit)
           enemyY = skyY + Math.random() * (groundY - skyY);
           enemyDriftTarget = -1;
@@ -561,6 +567,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       activeMisses = 0;
       aimOffset = 0;
       canFire = true;
+      enemyFlashUntilMs = 0;
       enemyDriftTarget = -1;
       if (enemyG) {
         enemyY = app.screen.height * 0.5;
@@ -603,11 +610,10 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
             g,
             x: scene.plane.x + 20,
             y: scene.plane.y + aimOffset,
-            targetY: scene.plane.y + aimOffset,
             active: true,
           };
           canFire = false;
-          setTimeout(() => { canFire = true; }, 400);
+          // (no setTimeout — tickActive restores canFire on hit/miss)
         } else if (event.type === 'direction') {
           if (event.dy === -1) aimOffset = Math.max(-AIM_MAX_OFFSET, aimOffset - AIM_ADJUST_PX);
           if (event.dy === 1)  aimOffset = Math.min(AIM_MAX_OFFSET,  aimOffset + AIM_ADJUST_PX);

@@ -341,33 +341,35 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     const skyY = h * 0.22;
     targetY = skyY + (groundY - skyY) * (1 - rl / 100);
 
-    // ── Basic mode: apply vertical velocity + life loss on ground touch ──
+    // ── Basic / alternating: vertical movement + fuel system ──────────────────
     if (modeId === 'basic') {
       if (groundBounceVel !== 0) {
         planeVelY += groundBounceVel;
         groundBounceVel = 0;
       }
-      // Dampen vel, blend toward OO-target (RL value)
       planeVelY *= 0.85;
       scene.plane.y += planeVelY * dt;
       scene.plane.y += (targetY - scene.plane.y) * 0.025 * dt;
 
-      // Ground collision
+      const isFlickering = now < flickerUntilMs;
+
       if (scene.plane.y >= groundY - 10) {
         scene.plane.y = groundY - 10;
-        lives = Math.max(0, lives - 1);
-        livesLost++;
-        planeVelY = GROUND_BOUNCE_VEL;
-        if (lives <= 0) {
-          // End run early
+        if (!isFlickering) {
+          fuel = Math.max(0, fuel - 1);
+          fuelLost++;
+          flickerUntilMs = now + FLICKER_DURATION_MS;
+          groundBounceVel = GROUND_BOUNCE_VEL;
+        }
+        if (fuel <= 0) {
           const result: RunResult = {
             runIndex,
             startedAt: runStarted,
-            durationMs: elapsedMs,
+            durationMs: now - runStarted,
             rlSeries,
             qualityPercent: 0,
             isValid: true,
-            gameSpecific: { distanceM: Math.round(distanceM), livesLost, timeAboveMidSec },
+            gameSpecific: { distanceM: Math.round(distanceM), timeAboveMidSec, fuelLost },
           };
           const cb = finishCb;
           finishCb = null;
@@ -375,10 +377,15 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
           return;
         }
       }
-      // Sky ceiling
+
+      // Flicker: oscillate plane alpha
+      scene.plane.alpha = isFlickering
+        ? 0.3 + 0.7 * Math.abs(Math.sin(now * FLICKER_HZ * Math.PI / 1000))
+        : 1;
+
       if (scene.plane.y <= skyY) scene.plane.y = skyY;
     } else {
-      // Normal smooth movement for other modes
+      scene.plane.alpha = 1;
       scene.plane.y += (targetY - scene.plane.y) * 0.045 * dt;
     }
 
@@ -455,7 +462,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       const gameSpecific: Record<string, number | boolean> =
         modeId === 'alternating' ? { score: altScore, misses: altMisses, distanceM: Math.round(distanceM) }
         : modeId === 'active'    ? { hits: activeHits, misses: activeMisses }
-        : { distanceM: Math.round(distanceM), timeAboveMidSec, livesLost };
+        : { distanceM: Math.round(distanceM), timeAboveMidSec, fuelLost };
       const result: RunResult = {
         runIndex,
         startedAt: runStarted,
@@ -498,8 +505,10 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       timeAboveMidSec = 0;
       lastAccumSec = 0;
       finishCb = onFinish;
-      lives = BASIC_LIVES;
-      livesLost = 0;
+      // Reset fuel state
+      fuel = MAX_FUEL;
+      fuelLost = 0;
+      flickerUntilMs = 0;
       planeVelY = 0;
       groundBounceVel = 0;
       altScore = 0;

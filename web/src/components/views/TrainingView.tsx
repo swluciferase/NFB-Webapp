@@ -1203,6 +1203,14 @@ export const TrainingView: FC<TrainingViewProps> = ({
   const liveBandPower = useBandPower(packets, filterParams ?? DEFAULT_FILTER_PARAMS);
   // Ref for stale-closure-safe access inside tick
   const liveBandPowerRef = useRef(liveBandPower);
+
+  // ── Z-Score mode state (must be before useEffect/useMemo that reference them) ──
+  const [metricMode, setMetricMode] = useState<MetricMode>('power');
+  const [zScoreDb, setZScoreDb]     = useState('chbmp_v1');
+  const [subjectAge, setSubjectAge] = useState(0);
+  const [zScoreResult, setZScoreResult] = useState<ZScoreResult | null>(null);
+  const [normReady, setNormReady] = useState(false);
+
   useEffect(() => { liveBandPowerRef.current = liveBandPower; }, [liveBandPower]);
 
   // ── Z-Score computation: runs whenever live band power updates in zscore mode ──
@@ -1237,12 +1245,6 @@ export const TrainingView: FC<TrainingViewProps> = ({
   useEffect(() => { evalBandPowerRef.current = evalBandPower; }, [evalBandPower]);
 
   const isLive = liveBandPower !== null && (packets?.length ?? 0) > 0;
-
-  // ── Z-Score mode state ──
-  const [metricMode, setMetricMode] = useState<MetricMode>('power');
-  const [zScoreDb, setZScoreDb]     = useState('chbmp_v1');
-  const [subjectAge, setSubjectAge] = useState(0);
-  const [zScoreResult, setZScoreResult] = useState<ZScoreResult | null>(null);
 
   const [indicators, setIndicators] = useState<EegIndicator[]>(makeDefaultIndicators);
   const [cardiac, setCardiac] = useState<CardiacState>({
@@ -1862,17 +1864,17 @@ export const TrainingView: FC<TrainingViewProps> = ({
                 onClick={() => {
                   setMetricMode(m);
                   if (m === 'zscore' && subjectAge > 0) {
-                    normEngineService.switchDb(zScoreDb).catch(console.warn);
+                    normEngineService.switchDb(zScoreDb).then(() => setNormReady(normEngineService.isReady())).catch(console.warn);
                   }
                 }}
-                disabled={m === 'zscore' && (subjectAge <= 0 || !normEngineService.isReady())}
+                disabled={m === 'zscore' && (subjectAge <= 0 || !normReady)}
                 style={{
                   flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 12, fontWeight: 600,
                   border: `1px solid ${metricMode === m ? 'rgba(232,160,32,0.6)' : 'var(--border)'}`,
                   background: metricMode === m ? 'rgba(232,160,32,0.15)' : 'var(--bg-raised, var(--bg-secondary))',
                   color: metricMode === m ? '#e8a020' : 'var(--text-secondary)',
-                  cursor: (m === 'zscore' && (subjectAge <= 0 || !normEngineService.isReady())) ? 'default' : 'pointer',
-                  opacity: (m === 'zscore' && (subjectAge <= 0 || !normEngineService.isReady())) ? 0.5 : 1,
+                  cursor: (m === 'zscore' && (subjectAge <= 0 || !normReady)) ? 'default' : 'pointer',
+                  opacity: (m === 'zscore' && (subjectAge <= 0 || !normReady)) ? 0.5 : 1,
                 }}
               >
                 {m === 'power' ? '功率模式' : 'Z-Score 模式'}
@@ -1893,7 +1895,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
                     onClick={() => {
                       if (!db.enabled) return;
                       setZScoreDb(db.id);
-                      if (subjectAge > 0) normEngineService.switchDb(db.id).catch(console.warn);
+                      if (subjectAge > 0) normEngineService.switchDb(db.id).then(() => setNormReady(normEngineService.isReady())).catch(console.warn);
                     }}
                     style={{
                       padding: '8px 10px', borderRadius: 7, textAlign: 'left',
@@ -1917,7 +1919,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
                   onChange={e => {
                     const age = Number(e.target.value);
                     setSubjectAge(age);
-                    if (age > 0) normEngineService.switchDb(zScoreDb).catch(console.warn);
+                    if (age > 0) normEngineService.switchDb(zScoreDb).then(() => setNormReady(normEngineService.isReady())).catch(console.warn);
                   }}
                   style={{
                     width: 56, padding: '2px 6px', borderRadius: 4,

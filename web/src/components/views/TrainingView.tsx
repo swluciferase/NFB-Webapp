@@ -1232,6 +1232,9 @@ export const TrainingView: FC<TrainingViewProps> = ({
       });
     });
   }, [liveBandPower, metricMode, zScoreResult]);
+  // Ref for stale-closure-safe access inside interval
+  const evalBandPowerRef = useRef(evalBandPower);
+  useEffect(() => { evalBandPowerRef.current = evalBandPower; }, [evalBandPower]);
 
   const isLive = liveBandPower !== null && (packets?.length ?? 0) > 0;
 
@@ -1397,7 +1400,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
     const interval = setInterval(() => {
       // Baseline recording: snapshot raw liveBandPower + all A1–A9 formula values
       if (baselinePhaseRef.current === 'recording') {
-        const bp = liveBandPowerRef.current;
+        const bp = evalBandPowerRef.current;
         const presetVals = PRESET_OPTIONS.slice(1).map(p => evalFormula(p.formula, bp));
         baselineRecordRef.current.push({
           bands: bp ? bp.map(row => [...row]) : [],
@@ -1417,7 +1420,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
         let newVal: number;
         if (ind.formula) {
           // Formula evaluation: id=5 FormulaCard + preset formulas for #1–4
-          const rawVal = evalFormula(ind.formula, liveBandPowerRef.current) ?? ind.value;
+          const rawVal = evalFormula(ind.formula, evalBandPowerRef.current) ?? ind.value;
           // Preset formulas: apply 5-sample moving average (window=5, overlap=4)
           if (ind.presetKey) {
             const maWin = [...ind.history.slice(-4), rawVal];

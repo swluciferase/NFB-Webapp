@@ -35,7 +35,8 @@ const PICKUP_FUEL_THRESHOLD = 3;
 // Active mode
 const ENEMY_X_FRACTION = 0.80;
 const MISSILE_FLIGHT_SEC = 10;  // missile takes 10s to reach the enemy
-const AIM_FRACTION = 0.05;     // up/down key adjusts aim by 5% of screen height
+const AIM_STEP_FRACTION = 0.005;  // each key press adjusts aim by 0.5% of screen height
+const AIM_MAX_FRACTION = 0.05;   // max offset ±5% of screen height
 const ENEMY_DRIFT_MS = 800;
 
 interface TrailParticle {
@@ -706,9 +707,9 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
           };
           canFire = false;
         } else if (event.type === 'direction') {
-          // Each press adjusts aim by 5% of screen height
-          const step = app.screen.height * AIM_FRACTION;
-          const maxOff = app.screen.height * 0.28; // ± half of sky-to-ground range
+          // Each press adjusts aim by 0.5% of screen height, max ±5%
+          const step = app.screen.height * AIM_STEP_FRACTION;
+          const maxOff = app.screen.height * AIM_MAX_FRACTION;
           if (event.dy === -1) aimOffset = Math.max(-maxOff, aimOffset - step);
           if (event.dy === 1)  aimOffset = Math.min(maxOff,  aimOffset + step);
         }

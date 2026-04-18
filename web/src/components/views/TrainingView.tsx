@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, type FC, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, type FC, type ChangeEvent } from 'react';
 import { serviceStart, serviceEnd, NoCreditError } from '../../services/creditApi';
 import type { EegPacket, FilterParams } from '../../types/eeg';
 import { CHANNEL_LABELS } from '../../types/eeg';
@@ -11,6 +11,18 @@ import {
   type NfbIndicatorSetting,
 } from '../../services/nfbSettingsStore';
 import { nfbLiveStore } from '../../services/nfbLiveStore';
+import { normEngineService } from '../../services/normEngineService';
+import { computeQeegZScores, getChannelBandZ, type ZScoreResult } from '../../services/qeegZScoreService';
+
+// ── Z-Score DB options ──────────────────────────────────────────────────────
+const ZSCORE_DBS = [
+  { id: 'chbmp_v1', label: 'CHBMP',   enabled: true  },
+  { id: 'hbn_v1',   label: 'HBN',     enabled: false },
+  { id: 'temple_u', label: 'TempleU', enabled: false },
+  { id: 'twn_v1',   label: 'TWN',     enabled: false },
+] as const;
+
+type MetricMode = 'power' | 'zscore';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1193,7 +1205,41 @@ export const TrainingView: FC<TrainingViewProps> = ({
   const liveBandPowerRef = useRef(liveBandPower);
   useEffect(() => { liveBandPowerRef.current = liveBandPower; }, [liveBandPower]);
 
+  // ── Z-Score computation: runs whenever live band power updates in zscore mode ──
+  useEffect(() => {
+    if (metricMode !== 'zscore' || subjectAge <= 0 || !liveBandPower) {
+      setZScoreResult(null);
+      return;
+    }
+    const result = computeQeegZScores(
+      [...CHANNEL_LABELS] as string[],
+      liveBandPower,
+      NFB_BANDS.map(b => ({ lo: b.startHz, hi: b.endHz })),
+      subjectAge,
+    );
+    setZScoreResult(result);
+  }, [liveBandPower, metricMode, subjectAge]);
+
+  // ── evalBandPower: substitutes Z-score values for raw power in formula evaluator ──
+  const evalBandPower = useMemo<number[][] | null>(() => {
+    if (metricMode === 'power' || !zScoreResult || !zScoreResult.valid) return liveBandPower;
+    if (!liveBandPower) return null;
+    return liveBandPower.map((_, chIdx) => {
+      const label = (CHANNEL_LABELS as readonly string[])[chIdx] ?? '';
+      return NFB_BANDS.map((_, bIdx) => {
+        const z = getChannelBandZ(zScoreResult, label, bIdx);
+        return isNaN(z) ? 0 : z;
+      });
+    });
+  }, [liveBandPower, metricMode, zScoreResult]);
+
   const isLive = liveBandPower !== null && (packets?.length ?? 0) > 0;
+
+  // ── Z-Score mode state ──
+  const [metricMode, setMetricMode] = useState<MetricMode>('power');
+  const [zScoreDb, setZScoreDb]     = useState('chbmp_v1');
+  const [subjectAge, setSubjectAge] = useState(0);
+  const [zScoreResult, setZScoreResult] = useState<ZScoreResult | null>(null);
 
   const [indicators, setIndicators] = useState<EegIndicator[]>(makeDefaultIndicators);
   const [cardiac, setCardiac] = useState<CardiacState>({
@@ -1756,7 +1802,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
             key={ind.id}
             indicator={ind}
             isLive={isLive}
-            liveBandPower={liveBandPower}
+            liveBandPower={evalBandPower}
             onToggle={eegCardHandlers.onToggle}
             onFormulaChange={(id, formula) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, formula } : i))}
             onThresholdChange={eegCardHandlers.onThresholdChange}
@@ -1764,14 +1810,14 @@ export const TrainingView: FC<TrainingViewProps> = ({
             onDirectionChange={eegCardHandlers.onDirectionChange}
           />
         ) : (
-          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={liveBandPower} {...eegCardHandlers} />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={evalBandPower} {...eegCardHandlers} />
         ))}
       </div>
 
       {/* ── Column 2: EEG even (#2 #4) + Cardiac ── */}
       <div style={colStyle}>
         {evenIndicators.map(ind => (
-          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={liveBandPower} {...eegCardHandlers} />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={evalBandPower} {...eegCardHandlers} />
         ))}
         <CardiacCard
           state={cardiac}
@@ -1802,6 +1848,87 @@ export const TrainingView: FC<TrainingViewProps> = ({
 
       {/* ── Column 4: Session Summary ── */}
       <div style={colStyle}>
+
+        {/* ── Z-Score mode controls ── */}
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>指標模式</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {(['power', 'zscore'] as MetricMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => {
+                  setMetricMode(m);
+                  if (m === 'zscore' && subjectAge > 0) {
+                    normEngineService.switchDb(zScoreDb).catch(console.warn);
+                  }
+                }}
+                disabled={m === 'zscore' && (subjectAge <= 0 || !normEngineService.isReady())}
+                style={{
+                  flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  border: `1px solid ${metricMode === m ? 'rgba(232,160,32,0.6)' : 'var(--border)'}`,
+                  background: metricMode === m ? 'rgba(232,160,32,0.15)' : 'var(--bg-raised, var(--bg-secondary))',
+                  color: metricMode === m ? '#e8a020' : 'var(--text-secondary)',
+                  cursor: (m === 'zscore' && (subjectAge <= 0 || !normEngineService.isReady())) ? 'default' : 'pointer',
+                  opacity: (m === 'zscore' && (subjectAge <= 0 || !normEngineService.isReady())) ? 0.5 : 1,
+                }}
+              >
+                {m === 'power' ? '功率模式' : 'Z-Score 模式'}
+              </button>
+            ))}
+          </div>
+
+          {metricMode === 'zscore' && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                Z-Score 資料庫
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+                {ZSCORE_DBS.map(db => (
+                  <button
+                    key={db.id}
+                    disabled={!db.enabled}
+                    onClick={() => {
+                      if (!db.enabled) return;
+                      setZScoreDb(db.id);
+                      if (subjectAge > 0) normEngineService.switchDb(db.id).catch(console.warn);
+                    }}
+                    style={{
+                      padding: '8px 10px', borderRadius: 7, textAlign: 'left',
+                      border: `1px solid ${zScoreDb === db.id ? 'rgba(232,160,32,0.6)' : 'var(--border)'}`,
+                      background: zScoreDb === db.id ? 'rgba(232,160,32,0.15)' : 'var(--bg-raised, var(--bg-secondary))',
+                      color: !db.enabled ? 'rgba(100,115,135,0.4)' : zScoreDb === db.id ? '#e8a020' : 'var(--text-secondary)',
+                      cursor: db.enabled ? 'pointer' : 'default',
+                      fontSize: 12, fontWeight: 600,
+                    }}
+                  >
+                    {db.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>受測者年齡</span>
+                <input
+                  type="number" min={5} max={100}
+                  value={subjectAge || ''}
+                  placeholder="—"
+                  onChange={e => {
+                    const age = Number(e.target.value);
+                    setSubjectAge(age);
+                    if (age > 0) normEngineService.switchDb(zScoreDb).catch(console.warn);
+                  }}
+                  style={{
+                    width: 56, padding: '2px 6px', borderRadius: 4,
+                    border: '1px solid var(--border)', background: 'var(--bg-tertiary)',
+                    color: 'var(--text-primary)', fontSize: 12,
+                  }}
+                />
+                {subjectAge === 0 && (
+                  <span style={{ fontSize: 11, color: '#f85149' }}>需填寫年齡</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Progress gauge + stats */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px', marginBottom: 10 }}>

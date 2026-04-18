@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
@@ -7,6 +8,7 @@ const APP_VERSION = '1.2.0'
 
 export default defineConfig({
   plugins: [
+    wasm(),
     react(),
     obfuscatorPlugin({
       include: ['src/**/*.js', 'src/**/*.ts', 'src/**/*.tsx'],

@@ -1,0 +1,17 @@
+{
+  "name": "norm-engine",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "norm_engine_bg.wasm",
+    "norm_engine.js",
+    "norm_engine_bg.js",
+    "norm_engine.d.ts"
+  ],
+  "main": "norm_engine.js",
+  "types": "norm_engine.d.ts",
+  "sideEffects": [
+    "./norm_engine.js",
+    "./snippets/*"
+  ]
+}

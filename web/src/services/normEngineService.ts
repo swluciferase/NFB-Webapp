@@ -7,7 +7,7 @@ import type { NormEngine } from '../pkg/norm_engine/norm_engine';
 
 class NormEngineService {
   private engine: NormEngine | null = null;
-  private loading = false;
+  private initPromise: Promise<void> | null = null;
   private currentDbKey = '';
 
   /**
@@ -17,10 +17,18 @@ class NormEngineService {
    * Redirects to login on 401/403.
    */
   async init(dbKey: string): Promise<void> {
-    if (this.loading) return;
     if (dbKey === this.currentDbKey && this.engine !== null) return;
+    if (this.initPromise !== null) return this.initPromise;
 
-    this.loading = true;
+    this.initPromise = this._doInit(dbKey);
+    try {
+      await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
+  }
+
+  private async _doInit(dbKey: string): Promise<void> {
     this.engine = null;
 
     try {
@@ -45,8 +53,6 @@ class NormEngineService {
     } catch (err) {
       console.error('[NormEngineService] init failed:', err);
       // Silent fail — Z-score mode stays unavailable until next retry
-    } finally {
-      this.loading = false;
     }
   }
 

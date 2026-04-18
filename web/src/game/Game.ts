@@ -56,7 +56,7 @@ export interface RunResult {
   rlSeries: number[];             // full sub-second Reward Level stream from the subject window
   qualityPercent: number;         // filled in by the main window at run end
   isValid: boolean;
-  gameSpecific: Record<string, number | boolean>;
+  gameSpecific: Record<string, number | boolean | string | number[]>;
 }
 
 export type GameInputEvent =

@@ -299,6 +299,7 @@ const EegCard: FC<{
   indicator: EegIndicator;
   isLive: boolean;
   liveBandPower?: number[][] | null;
+  metricMode?: MetricMode;
   onToggle: (id: number) => void;
   onChannelChange: (id: number, ch: Channel) => void;
   onBandChange: (id: number, b: Band) => void;
@@ -306,7 +307,7 @@ const EegCard: FC<{
   onThresholdChange: (id: number, delta: number) => void;
   onAutoThresholdToggle: (id: number) => void;
   onPresetApply: (id: number, presetKey: string, formula: string, direction: Direction) => void;
-}> = ({ indicator, isLive, liveBandPower, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onPresetApply }) => {
+}> = ({ indicator, isLive, liveBandPower, metricMode, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onPresetApply }) => {
   const lang = useLang();
   const aboveThreshold = indicator.value >= indicator.threshold;
   const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
@@ -383,7 +384,7 @@ const EegCard: FC<{
       {/* Value display */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
-          {isLive ? indicator.value.toFixed(3) : '—'} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{activePreset ? '' : 'μV²'}</span>
+          {isLive ? indicator.value.toFixed(3) : '—'} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{activePreset ? '' : (metricMode === 'zscore' ? 'Z' : 'μV²')}</span>
         </span>
         <Badge label={met ? 'ON' : 'OFF'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
@@ -1226,7 +1227,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
       subjectAge,
     );
     setZScoreResult(result);
-  }, [liveBandPower, metricMode, subjectAge]);
+  }, [liveBandPower, metricMode, subjectAge, normReady]);
 
   // ── evalBandPower: substitutes Z-score values for raw power in formula evaluator ──
   const evalBandPower = useMemo<number[][] | null>(() => {
@@ -1431,7 +1432,10 @@ export const TrainingView: FC<TrainingViewProps> = ({
             newVal = rawVal;
           }
         } else {
-          const live = getLiveBandPower(ind.channel, ind.band);
+          const bp = evalBandPowerRef.current;
+          const chIdx = CHANNEL_LABELS.indexOf(ind.channel as typeof CHANNEL_LABELS[number]);
+          const bandIdx = NFB_BANDS.findIndex((b: { name: string }) => b.name === ind.band);
+          const live = (bp && chIdx >= 0 && bandIdx >= 0) ? (bp[chIdx]?.[bandIdx] ?? null) : null;
           if (live === null) {
             const newHistory = [...ind.history, ind.value].slice(-HISTORY_LEN);
             const newThreshold = ind.autoThreshold
@@ -1815,14 +1819,14 @@ export const TrainingView: FC<TrainingViewProps> = ({
             onDirectionChange={eegCardHandlers.onDirectionChange}
           />
         ) : (
-          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={evalBandPower} {...eegCardHandlers} />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={evalBandPower} metricMode={metricMode} {...eegCardHandlers} />
         ))}
       </div>
 
       {/* ── Column 2: EEG even (#2 #4) + Cardiac ── */}
       <div style={colStyle}>
         {evenIndicators.map(ind => (
-          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={evalBandPower} {...eegCardHandlers} />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={evalBandPower} metricMode={metricMode} {...eegCardHandlers} />
         ))}
         <CardiacCard
           state={cardiac}

@@ -75,7 +75,7 @@ function baseValue(kind: BaseballHitKind): number {
 }
 
 function isOut(kind: BaseballHitKind): boolean {
-  return kind === 'whiff' || kind === 'groundOut' || kind === 'popFly' || kind === 'deepFlyOut';
+  return kind === 'whiff' || kind === 'calledStrike' || kind === 'groundOut' || kind === 'popFly' || kind === 'deepFlyOut';
 }
 
 // Active mode: timing bonus/penalty thresholds (fraction of CHARGE_MS elapsed)
@@ -87,6 +87,10 @@ const ACTIVE_BONUS_MULT   = 1.25;  // +25% → triple more likely to be homerun
 const ACTIVE_PENALTY_MULT = 0.75;  // -25% → triple more likely to be double
 const ACTIVE_NEUTRAL_MULT = 1.00;
 
+// Dual mode: pitcher vs batter RL comparison multiplier range
+const DUAL_MAX_BUFF   = 1.30;  // batter RL >> pitcher RL → +30%
+const DUAL_MAX_DEBUFF = 0.70;  // pitcher RL >> batter RL → -30%
+
 export function createBaseballGame(args: BaseballGameArgs): GameInstance {
   const { app, stage, theme, lang, modeId = 'basic', onStats, inningTotal = 9,
     dualTeamA = 'Team A', dualTeamB = 'Team B' } = args;
@@ -94,8 +98,12 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
   let scene: BaseballScene | null = buildBaseballScene(theme, ballpark);
   stage.addChild(scene.root);
   scene.layout(app.screen.width, app.screen.height, true);
-  // In dual mode the scoreboard shows 2×N half-innings; each column = one half.
-  scene.setInningTotal(modeId === 'dual' ? inningTotal * 2 : inningTotal);
+  if (modeId === 'dual') {
+    // Dual mode: hide the Pixi scoreboard; React DualScoreboard renders instead.
+    scene.hideScoreboard();
+  } else {
+    scene.setInningTotal(inningTotal);
+  }
 
   // ── Dual mode team tracking ──────────────────────────────────────────────
   // teamARuns[i] / teamBRuns[i]: runs scored in inning i (0-based). −1 = not yet played.
@@ -103,6 +111,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
   const teamBRuns: number[] = Array.from({ length: inningTotal }, () => -1);
 
   let oo = 0;
+  let oo2 = 0;   // second RL for dual mode (pitcher's RL when batting, batter's RL when pitching)
   let runIndex = -1;
   let runStartedAt = 0;
   let finishCb: ((r: RunResult) => void) | null = null;
@@ -129,6 +138,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
   let runsScored = 0;
   let meanChargeSum = 0;
   let rlSeries: number[] = [];
+  let rl2Series: number[] = [];  // pitcher RL series for dual mode
   let lastResult: BaseballHitKind | null = null;
   let inningComplete = false;
   // resolvePitch() may determine the inning is over mid-POST, but we want
@@ -148,6 +158,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
   // Active mode — swing timing
   let activeSwingMult = ACTIVE_NEUTRAL_MULT; // set when Space is pressed during CHARGE
   let activePendingSwing = false;            // Space pressed, waiting for pitch to resolve
+  let calledStrikes = 0;                     // count of called strikes (active mode, no swing)
 
   // Per-session line score (cumulative, one entry per inning completed + the
   // in-progress inning). The scene re-derives the total from this array.
@@ -162,6 +173,10 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
 
   // Full-run OO accumulator so the controller can compute session-wide avg.
   let lastOoAccumSec = 0;
+
+  // Throttle emitStats to ~100ms to prevent React re-render jitter
+  let lastEmitMs = 0;
+  const EMIT_INTERVAL_MS = 100;
 
   // Seedable RNG for batter handedness. Re-seeded on every new batter so
   // the sequence is deterministic within a session run but still mixed.
@@ -229,6 +244,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
         dualIsBottomHalf: !isTopHalf,
         dualCurrentInning: inningNumber + 1,
         dualInningTotal: inningTotal,
+        dualPitcherRL: Math.round(oo2),
       }),
     };
     onStats(stats);
@@ -285,7 +301,10 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
     // Pre-run idle: just animate clouds/sun
     if (runIndex < 0) {
       scene.tick({ now, dt, worldW: app.screen.width, worldH: app.screen.height });
-      emitStats();
+      if (now - lastEmitMs >= EMIT_INTERVAL_MS) {
+        lastEmitMs = now;
+        emitStats();
+      }
       return;
     }
 
@@ -320,10 +339,15 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
         scene.setMeter(meter);
       } else if (inPitchMs < PITCH_MS || activePendingSwing) {
         // POST phase — resolve once, then let the scene animate ball flight
-        // active mode: activePendingSwing also enters POST phase early
+        // active mode: activePendingSwing enters POST early (player swung)
         scene.setCountdown(null);
         if (!pitchResolved) {
-          resolvePitch();
+          if (modeId === 'active' && !activePendingSwing) {
+            // Active mode: CHARGE ended without Space → called strike
+            resolveCalledStrike();
+          } else {
+            resolvePitch();
+          }
           pitchResolved = true;
           activePendingSwing = false;
         }
@@ -331,7 +355,11 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
         // Pitch fully elapsed — advance to the next pitch or end the inning.
         // Safety net: resolve if POST was skipped (pause edge case).
         if (!pitchResolved) {
-          resolvePitch();
+          if (modeId === 'active' && !activePendingSwing) {
+            resolveCalledStrike();
+          } else {
+            resolvePitch();
+          }
           pitchResolved = true;
         }
         if (
@@ -354,13 +382,18 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
 
     scene.tick({ now, dt, worldW: app.screen.width, worldH: app.screen.height });
 
-    // Emit telemetry every second
+    // Accumulate RL series at 1Hz
     const nowSec = Math.floor(elapsedMs / 1000);
     if (nowSec > lastOoAccumSec) {
       rlSeries.push(oo);
+      if (modeId === 'dual') rl2Series.push(oo2);
       lastOoAccumSec = nowSec;
     }
-    emitStats();
+    // Throttle emitStats to ~100ms to prevent React re-render jitter
+    if (now - lastEmitMs >= EMIT_INTERVAL_MS) {
+      lastEmitMs = now;
+      emitStats();
+    }
 
     // End of inning? Wait until the inning is flagged complete AND the
     // post-flight animation has a chance to settle before handing back.
@@ -386,13 +419,29 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
           homeRuns,
           totalBases,
           runsScored,
+          calledStrikes,
           meanCharge: Math.round(meanChargeSum / pitches),
           ballparkM: ballpark.wallM,
+          ...(modeId === 'dual' ? { rl2Series: rl2Series.slice() } : {}),
         },
       };
-      const cb = finishCb;
-      finishCb = null;
-      cb(result);
+
+      // Dual mode last half-inning: show end overlay with final scores
+      const isLastHalfInning = modeId === 'dual' && runIndex >= inningTotal * 2 - 1;
+      if (isLastHalfInning && scene) {
+        const totalA = teamARuns.filter(r => r >= 0).reduce((s, r) => s + r, 0);
+        const totalB = teamBRuns.filter(r => r >= 0).reduce((s, r) => s + r, 0);
+        scene.showEndOverlay(dualTeamA, totalA, dualTeamB, totalB);
+        // Delay finishCb so the overlay is visible for 4 seconds before
+        // the controller destroys the scene.
+        const cb = finishCb;
+        finishCb = null;
+        setTimeout(() => cb(result), 4000);
+      } else {
+        const cb = finishCb;
+        finishCb = null;
+        cb(result);
+      }
     }
   };
 
@@ -400,7 +449,18 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
     if (!scene) return;
     const rawCharge = chargeSec > 0 ? chargeAccum / chargeSec : 0;
     // Active mode: apply swing-timing multiplier
-    const mult = modeId === 'active' ? activeSwingMult : ACTIVE_NEUTRAL_MULT;
+    // Dual mode: apply pitcher-vs-batter RL comparison multiplier
+    let mult = modeId === 'active' ? activeSwingMult : ACTIVE_NEUTRAL_MULT;
+    if (modeId === 'dual') {
+      // oo = batter RL, oo2 = pitcher RL
+      // diff > 0 means batter is stronger → buff; diff < 0 means pitcher is stronger → debuff
+      const diff = oo - oo2;  // range: -100 to +100
+      // Map to multiplier: 0 diff = 1.0; +100 diff = DUAL_MAX_BUFF; -100 diff = DUAL_MAX_DEBUFF
+      const t = diff / 100;   // -1 to +1
+      mult = t >= 0
+        ? 1.0 + t * (DUAL_MAX_BUFF - 1.0)
+        : 1.0 + t * (1.0 - DUAL_MAX_DEBUFF);
+    }
     const clamped = Math.max(0, Math.min(100, rawCharge * mult));
     meanChargeSum += clamped;
     pitchCount += 1;
@@ -451,6 +511,31 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
     }
   }
 
+  /** Active mode: CHARGE phase ended without Space press → called strike. */
+  function resolveCalledStrike() {
+    if (!scene) return;
+    pitchCount += 1;
+    calledStrikes += 1;
+    strikes += 1;
+    lastResult = 'calledStrike';
+
+    // No swing animation — ball just passes by
+    scene.flashResult('calledStrike', lang);
+
+    if (strikes >= MAX_STRIKES) {
+      outs += 1;
+      const atBatEnded = true;
+      if (atBatEnded) {
+        batterIdx += 1;
+        if (batterIdx >= BATTERS_PER_INNING || pitchCount >= MAX_PITCHES_PER_INNING) {
+          inningEndPending = true;
+        } else {
+          pendingBatterSwitch = true;
+        }
+      }
+    }
+  }
+
   app.ticker.add(tick);
 
   return {
@@ -465,6 +550,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
       batterIdx = 0;
       strikes = 0;
       whiffs = 0;
+      calledStrikes = 0;
       outs = 0;
       hits = 0;
       homeRuns = 0;
@@ -472,6 +558,7 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
       runsScored = 0;
       meanChargeSum = 0;
       rlSeries = [];
+      rl2Series = [];
       lastOoAccumSec = 0;
       chargeAccum = 0;
       chargeSec = 0;
@@ -497,16 +584,25 @@ export function createBaseballGame(args: BaseballGameArgs): GameInstance {
         scene.setMeter(0);
         scene.setRunners(runners);
         scene.setCountdown(null);
+        if (modeId === 'dual') scene.setTeamColors(!isTopHalf);
         publishLineScore();
       }
       beginAtBat();
       scheduleNextPitch(0);
     },
-    setRL(next) {
-      oo = Math.max(0, Math.min(100, next));
+    setRL(next, _ta?, rl2?) {
+      if (modeId === 'dual' && !isTopHalf) {
+        // Bottom half: rl=Team A (now pitching), rl2=Team B (now batting)
+        oo = Math.max(0, Math.min(100, rl2 ?? 0));   // batter = Team B
+        oo2 = Math.max(0, Math.min(100, next));       // pitcher = Team A
+      } else {
+        // Top half or non-dual: rl=batter, rl2=pitcher
+        oo = Math.max(0, Math.min(100, next));
+        if (rl2 != null) oo2 = Math.max(0, Math.min(100, rl2));
+      }
     },
     onInput(event) {
-      if (modeId !== 'active') return;
+      if (modeId !== 'active') return;  // dual mode: no manual swing
       if (event.type !== 'primary') return;
       if (runIndex < 0 || paused || pitchResolved || activePendingSwing) return;
 

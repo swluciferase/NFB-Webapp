@@ -54,6 +54,7 @@ export class GameSessionController {
   private runIndex = 0;
   private listeners = new Set<Listener>();
   private sessionId: string = uid();
+  private lastTa = 50;
 
   constructor(opts: GameSessionControllerOptions) {
     this.channel = opts.channel;
@@ -100,6 +101,7 @@ export class GameSessionController {
       plannedCoveragePct: cfg.plannedCoveragePct,
       patternId:  cfg.patternId,
       noFeedback: cfg.noFeedback,
+      paletteId: cfg.paletteId,
       dualTeamA: cfg.dualTeamA,
       dualTeamB: cfg.dualTeamB,
     });
@@ -121,6 +123,7 @@ export class GameSessionController {
       plannedCoveragePct: cfg.plannedCoveragePct,
       patternId:  cfg.patternId,
       noFeedback: cfg.noFeedback,
+      paletteId: cfg.paletteId,
       dualTeamA: cfg.dualTeamA,
       dualTeamB: cfg.dualTeamB,
     });
@@ -140,10 +143,14 @@ export class GameSessionController {
       this.runIndex += 1;
     }
     this.runStartedAt = this.clock();
+    // Freeform zentangle uses the user-chosen duration; other games use fixed per-game durations.
+    const dur = this.config.plannedDurationSec != null && this.config.gameId === 'zentangle'
+      ? this.config.plannedDurationSec
+      : runDurationFor(this.config.gameId);
     this.channel.post({
       kind: 'runStart',
       runIndex: this.runIndex,
-      runDurationSec: runDurationFor(this.config.gameId),
+      runDurationSec: dur,
       startedAt: this.runStartedAt,
     });
     this.transition('runActive');
@@ -162,6 +169,11 @@ export class GameSessionController {
     this.sessionPausedMs += this.clock() - this.pausedAt;
     this.channel.post({ kind: 'resume' });
     this.transition(this.previousState);
+  }
+
+  /** Store the latest TA so the session report can use it. */
+  setLastTa(ta: number): void {
+    this.lastTa = ta;
   }
 
   abort(): void {
@@ -195,6 +207,7 @@ export class GameSessionController {
       runs: this.runs,
       validRunsCount: validRuns.length,
       avgRL,
+      lastTa: this.lastTa,
       nfbSettingsSnapshot: nfbSettingsStore.read(),
     };
   }
@@ -212,6 +225,7 @@ export class GameSessionController {
           plannedCoveragePct: this.config.plannedCoveragePct,
           patternId: this.config.patternId,
           noFeedback: this.config.noFeedback,
+          paletteId: this.config.paletteId,
           dualTeamA: this.config.dualTeamA,
           dualTeamB: this.config.dualTeamB,
         });

@@ -103,6 +103,8 @@ export class GameEngine {
         .__zentangleTargetPct = m.plannedCoveragePct ?? 80;
       (this.container as unknown as { __zentangleNoFeedback?: boolean })
         .__zentangleNoFeedback = m.noFeedback ?? false;
+      (this.container as unknown as { __zentanglePaletteId?: string })
+        .__zentanglePaletteId = m.paletteId;
       (this.container as unknown as { __karesanzuiSeason?: string })
         .__karesanzuiSeason = m.modeId;
       (this.container as unknown as { __karesanzuiPattern?: string })
@@ -125,11 +127,11 @@ export class GameEngine {
       this.currentRunIndex = m.runIndex;
       this.instance?.startRun(m.runIndex, (result) => {
         this.channel.post({ kind: 'runResult', runIndex: result.runIndex, result });
-      });
+      }, m.runDurationSec);
       return;
     }
     if (m.kind === 'rl') {
-      this.instance?.setRL(m.rl, m.ta);
+      this.instance?.setRL(m.rl, m.ta, m.rl2);
       return;
     }
     if (m.kind === 'pause') {

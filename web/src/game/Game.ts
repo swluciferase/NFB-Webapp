@@ -89,6 +89,8 @@ export interface GameStats {
   dualIsBottomHalf?: boolean; // true while Team B is batting
   dualCurrentInning?: number; // 1-based inning number
   dualInningTotal?: number;
+  /** Dual mode: opposing team's RL (pitcher RL when batting). */
+  dualPitcherRL?: number;
   // Zentangle-specific. coveragePct 0..100 tracks how much of the
   // zentangle template has been traced within the coverage radius.
   coveragePct?: number;
@@ -100,6 +102,7 @@ export interface GameStats {
 
 export type BaseballHitKind =
   | 'whiff'
+  | 'calledStrike'
   | 'groundOut'
   | 'popFly'
   | 'deepFlyOut'
@@ -121,9 +124,10 @@ export interface GameFactoryArgs {
 export type GameFactory = (args: GameFactoryArgs) => GameInstance;
 
 export interface GameInstance {
-  startRun(runIndex: number, onFinish: (r: RunResult) => void): void;
-  /** rl: 0–100 Reward Level score. ta: threshold from NFB settings (default 50). */
-  setRL(rl: number, ta?: number): void;
+  startRun(runIndex: number, onFinish: (r: RunResult) => void, runDurationSec?: number): void;
+  /** rl: 0–100 Reward Level score. ta: threshold from NFB settings (default 50).
+   *  rl2: optional second RL for dual-EEG modes (e.g. baseball dual). */
+  setRL(rl: number, ta?: number, rl2?: number): void;
   onInput?(event: GameInputEvent): void;
   pause(): void;
   resume(): void;

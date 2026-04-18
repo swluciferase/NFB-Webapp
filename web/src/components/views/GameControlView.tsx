@@ -10,6 +10,7 @@ import { OpenSubjectWindowButton } from '../../game/control/OpenSubjectWindowBut
 import { SubjectWindowStatus } from '../../game/control/SubjectWindowStatus';
 import { TherapistHud } from '../../game/control/TherapistHud';
 import { SessionReportView } from '../../game/control/sessionReport';
+import { nfbLiveStore } from '../../services/nfbLiveStore';
 
 export interface GameControlViewProps {
   packets: EegPacket[] | undefined;
@@ -64,8 +65,14 @@ export const GameControlView: FC<GameControlViewProps> = ({
   const { rl, ta } = useGameOverlayOpacity(metrics);
   const rlRef = useRef(0);
   const taRef = useRef(0);
+  const remoteRlRef = useRef<number | undefined>(undefined);
   useEffect(() => { rlRef.current = rl; }, [rl]);
   useEffect(() => { taRef.current = ta; }, [ta]);
+
+  // Subscribe to remote RL from other tabs (used as rl2 in dual mode)
+  useEffect(() => {
+    return nfbLiveStore.onRemote((snap) => { remoteRlRef.current = snap.rl; });
+  }, []);
 
   // Create channel + controller once
   useEffect(() => {
@@ -108,7 +115,16 @@ export const GameControlView: FC<GameControlViewProps> = ({
     if (!ch) return;
     const startedAt = performance.now();
     const id = window.setInterval(() => {
-      ch.post({ kind: 'rl', t: performance.now() - startedAt, rl: rlRef.current, ta: taRef.current });
+      const currentTa = taRef.current;
+      const isDual = controllerRef.current?.config?.modeId === 'dual';
+      ch.post({
+        kind: 'rl',
+        t: performance.now() - startedAt,
+        rl: rlRef.current,
+        ta: currentTa,
+        ...(isDual && remoteRlRef.current != null ? { rl2: remoteRlRef.current } : {}),
+      });
+      controllerRef.current?.setLastTa(currentTa);
     }, 100);
     return () => window.clearInterval(id);
   }, [controllerState]);
@@ -121,6 +137,29 @@ export const GameControlView: FC<GameControlViewProps> = ({
       ch.post({ kind: 'heartbeatMain', t: performance.now() });
     }, 2000);
     return () => window.clearInterval(id);
+  }, []);
+
+  // Forward Space key from control window to subject window via GameChannel,
+  // so the therapist can trigger swings in active-mode baseball without
+  // switching focus to the subject popup (same pattern as VeloMynd).
+  useEffect(() => {
+    const ch = channelRef.current;
+    if (!ch) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      // Don't intercept when typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      ch.post({ kind: 'gameInput', event: { type: 'primary' } });
+    };
+    // Use capture phase so scrollable containers can't swallow the event
+    window.addEventListener('keydown', handler, true);
+    document.addEventListener('keydown', handler, true);
+    return () => {
+      window.removeEventListener('keydown', handler, true);
+      document.removeEventListener('keydown', handler, true);
+    };
   }, []);
 
   const onOpenSubject = () => {

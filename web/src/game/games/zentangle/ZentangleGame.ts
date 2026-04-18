@@ -1,6 +1,8 @@
 import {
   Container,
   Graphics,
+  Text,
+  TextStyle,
   type Application,
   type Ticker,
 } from 'pixi.js';
@@ -26,6 +28,8 @@ export interface ZentangleGameArgs {
    * biofeedback is disabled, the patient simply traces the pattern.
    */
   noFeedback?: boolean;
+  /** Freeform palette ID — used only when modeId === 'freeform'. */
+  paletteId?: string;
   onStats?: GameStatsListener;
 }
 
@@ -57,10 +61,58 @@ function coverageRadiusFor(brush: number): number {
   return Math.max(brush * 1.6, 16);
 }
 
+// ── Freeform palette definitions ──────────────────────────────────────────
+
+interface Palette {
+  lowR: number; lowG: number; lowB: number;
+  highR: number; highG: number; highB: number;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const n = parseInt(hex.slice(1), 16);
+  return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
+}
+
+const PALETTE_DEFS: Record<string, { low: string; high: string }> = {
+  // ── Gradient (同色調漸變) ──
+  ocean:  { low: '#1a3a5c', high: '#7ee8c6' },
+  sunset: { low: '#4a1942', high: '#ffd166' },
+  forest: { low: '#1a2e1a', high: '#88e088' },
+  sakura: { low: '#3d1f3d', high: '#ffb7c5' },
+  aurora: { low: '#0a1a3a', high: '#c4a0ff' },
+  ember:  { low: '#2a0a0a', high: '#ff6644' },
+  // ── Contrast (對比色) ──
+  fire_ice:    { low: '#2244cc', high: '#ff3322' },
+  coral_teal:  { low: '#008080', high: '#ff6f61' },
+  violet_lime: { low: '#88cc22', high: '#8833cc' },
+  gold_navy:   { low: '#0f1d4a', high: '#ffc832' },
+  rose_cyan:   { low: '#00cccc', high: '#e63370' },
+};
+
+function getPalette(id: string): Palette {
+  const def = PALETTE_DEFS[id] ?? PALETTE_DEFS.ocean;
+  const lo = hexToRgb(def.low);
+  const hi = hexToRgb(def.high);
+  return { lowR: lo.r, lowG: lo.g, lowB: lo.b, highR: hi.r, highG: hi.g, highB: hi.b };
+}
+
+function lerpColor(pal: Palette, t: number): number {
+  const f = Math.max(0, Math.min(1, t));
+  const r = Math.round(pal.lowR + (pal.highR - pal.lowR) * f);
+  const g = Math.round(pal.lowG + (pal.highG - pal.lowG) * f);
+  const b = Math.round(pal.lowB + (pal.highB - pal.lowB) * f);
+  return (r << 16) | (g << 8) | b;
+}
+
+// ── Freeform run duration (used only if controller doesn't end it) ────────
+const FREEFORM_MAX_RUN_MS = 1200_000; // 20 min safety cap
+
 export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   const { app, stage, modeId, onStats } = args;
+  const isFreeform = modeId === 'freeform';
   const noFeedback = args.noFeedback ?? false;
   const completeFraction = Math.max(0.05, Math.min(1, args.targetPct / 100));
+  const palette = isFreeform ? getPalette(args.paletteId ?? 'ocean') : null;
 
   const root = new Container();
   stage.addChild(root);
@@ -95,6 +147,8 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   let paused = false;
   let rlSeries: number[] = [];
   let lastAccumSec = 0;
+  /** Planned run duration in ms — set by startRun for freeform time-based end. */
+  let runDurationMs = FREEFORM_MAX_RUN_MS;
 
   // Pointer state on the canvas (native DOM events). We keep a map of
   // active pointers so multi-touch still works, but only the first
@@ -107,6 +161,28 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   const prevCursor = canvas.style.cursor;
   canvas.style.touchAction = 'none';
   canvas.style.cursor = 'crosshair';
+
+  // ── End overlay ─────────────────────────────────────────────────────────
+  const endOverlay = new Container();
+  endOverlay.visible = false;
+  root.addChild(endOverlay);
+
+  const endBg = new Graphics();
+  endOverlay.addChild(endBg);
+
+  const endTitle = new Text({
+    text: '訓練完成',
+    style: new TextStyle({
+      fontFamily: '-apple-system, system-ui, sans-serif',
+      fontSize: 32,
+      fontWeight: '800',
+      fill: '#ffffff',
+      align: 'center',
+      dropShadow: { color: '#000000', blur: 8, distance: 0, alpha: 0.5 },
+    }),
+  });
+  endTitle.anchor.set(0.5);
+  endOverlay.addChild(endTitle);
 
   function layout() {
     const w = app.screen.width;
@@ -128,6 +204,7 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
 
   function drawTemplate() {
     templateLayer.clear();
+    if (isFreeform) return; // no template in freeform mode
     const alpha = noFeedback ? NO_FEEDBACK_ALPHA : templateAlphaFromOO(oo);
     for (const stroke of strokes) {
       if (stroke.length < 2) continue;
@@ -146,6 +223,13 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   }
 
   function regeneratePattern() {
+    if (isFreeform) {
+      strokes = [];
+      samples = [];
+      coveredCount = 0;
+      userLayer.clear();
+      return;
+    }
     strokes = generatePattern(panelW, panelH, currentPattern);
     samples = buildSamples(strokes, SAMPLE_SPACING);
     coveredCount = 0;
@@ -154,6 +238,7 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   }
 
   function markCoverage(px: number, py: number) {
+    if (isFreeform) return;
     const radius = coverageRadiusFor(BRUSH_WIDTH);
     const r2 = radius * radius;
     for (let i = 0; i < samples.length; i++) {
@@ -169,9 +254,6 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   }
 
   function getLocalPanelPoint(e: PointerEvent): { x: number; y: number } | null {
-    // clientX/Y → canvas-local → panel-local. The Pixi renderer uses CSS
-    // pixel coordinates in app.screen, so the CSS-relative bounding rect
-    // is the right reference.
     const rect = canvas.getBoundingClientRect();
     const cx = ((e.clientX - rect.left) / rect.width) * app.screen.width;
     const cy = ((e.clientY - rect.top) / rect.height) * app.screen.height;
@@ -181,13 +263,22 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
     return { x: lx, y: ly };
   }
 
+  /** Get the current stroke color — RL-dependent for freeform, fixed for template modes. */
+  function currentStrokeColor(): number {
+    if (isFreeform && palette) {
+      return lerpColor(palette, oo / 100);
+    }
+    return USER_STROKE_COLOR;
+  }
+
   function drawUserSegment(a: { x: number; y: number }, b: { x: number; y: number }) {
+    const color = currentStrokeColor();
     userLayer.moveTo(a.x + panelX, a.y + panelY);
     userLayer.lineTo(b.x + panelX, b.y + panelY);
     userLayer.stroke({
-      color: USER_STROKE_COLOR,
+      color,
       alpha: 1,
-      width: BRUSH_WIDTH,
+      width: isFreeform ? 4 : BRUSH_WIDTH,
       cap: 'round',
       join: 'round',
     });
@@ -242,13 +333,44 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
     resizeDebounceTimer = setTimeout(() => {
       resizeDebounceTimer = null;
       layout();
-      regeneratePattern();
+      if (!isFreeform) regeneratePattern();
     }, 150);
   };
   app.renderer.on('resize', resizeListener);
 
   layout();
   regeneratePattern();
+
+  /** Show photo-frame effect + "訓練完成" overlay. */
+  function showEndOverlay() {
+    const w = app.screen.width;
+    const h = app.screen.height;
+
+    endBg.clear();
+    // Semi-transparent vignette around the canvas
+    endBg.rect(0, 0, w, h).fill({ color: 0x0a0f1a, alpha: 0.45 });
+    // Inner cutout revealing the artwork with a "photo frame" border
+    const frameW = panelW + 24;
+    const frameH = panelH + 24;
+    const fx = (w - frameW) / 2;
+    const fy = (h - frameH) / 2;
+    // White frame border
+    endBg.roundRect(fx, fy, frameW, frameH, 6)
+      .fill({ color: 0xffffff, alpha: 0.95 });
+    // Re-draw the panel background inside the frame (artwork is already there on userLayer)
+    endBg.roundRect(fx + 12, fy + 12, panelW, panelH, 4)
+      .fill({ color: PANEL_BG_COLOR, alpha: 1 });
+    // Shadow under frame
+    endBg.roundRect(fx + 4, fy + 4, frameW, frameH, 6)
+      .fill({ color: 0x000000, alpha: 0.15 });
+
+    // Move endBg behind artwork layers but above backdrop
+    root.setChildIndex(endBg, root.getChildIndex(panelBg));
+
+    endTitle.x = w / 2;
+    endTitle.y = fy + frameH + 36;
+    endOverlay.visible = true;
+  }
 
   const tick = (_ticker: Ticker) => {
     if (paused) return;
@@ -265,11 +387,36 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
     }
     emitStats();
 
-    const pct = samples.length ? coveredCount / samples.length : 0;
-    const complete = pct >= completeFraction;
+    if (isFreeform) {
+      // Freeform: time-based end — game self-terminates when planned duration elapses.
+      if (elapsedMs >= runDurationMs && finishCb) {
+        runFinished = true;
+        showEndOverlay();
+        const result: RunResult = {
+          runIndex,
+          startedAt: runStarted,
+          durationMs: elapsedMs,
+          rlSeries,
+          qualityPercent: 0,
+          isValid: true,
+          gameSpecific: { freeform: true },
+        };
+        const cb = finishCb;
+        finishCb = null;
+        cb(result);
+      }
+      return;
+    }
 
-    if (complete && finishCb) {
+    // Template mode: the run continues past the target percentage — the
+    // player can keep drawing until the entire template is covered.
+    // End only when ≥97% of samples are hit (edge samples may be unreachable).
+    const pct = samples.length ? coveredCount / samples.length : 0;
+    const allCovered = pct >= 0.97;
+
+    if (allCovered && finishCb) {
       runFinished = true;
+      showEndOverlay();
       const result: RunResult = {
         runIndex,
         startedAt: runStarted,
@@ -291,10 +438,17 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
 
   function emitStats() {
     if (!onStats) return;
+    if (isFreeform) {
+      onStats({
+        rl: runIndex >= 0 ? Math.round(oo) : 0,
+        // Use coveragePct = -1 as sentinel so the HUD knows it's freeform
+        // (SubjectWindowRoot hides the coverage bar when coveragePct is set,
+        // and we want it hidden in freeform).
+      });
+      return;
+    }
     const pct = samples.length ? (coveredCount / samples.length) * 100 : 0;
     onStats({
-      // Show 0 before the run starts so the HUD number doesn't flicker from
-      // noisy EEG OO data — feedback is only meaningful during an active run.
       rl: runIndex >= 0 ? Math.round(oo) : 0,
       coveragePct: Math.round(pct * 10) / 10,
     });
@@ -303,7 +457,7 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   app.ticker.add(tick);
 
   return {
-    startRun(idx, onFinish) {
+    startRun(idx, onFinish, durationSec) {
       runIndex = idx;
       runStarted = performance.now();
       runFinished = false;
@@ -311,22 +465,24 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
       lastAccumSec = 0;
       finishCb = onFinish;
       activePointers.clear();
-      // Each run picks the next pattern so multi-run sessions cycle through
-      // the three layouts instead of repeating the wizard-selected mode.
-      if (idx > 0) {
-        const startIdx = PATTERN_NAMES.indexOf(patternFromModeId(modeId));
-        currentPattern = PATTERN_NAMES[(startIdx + idx) % PATTERN_NAMES.length];
+      endOverlay.visible = false;
+      runDurationMs = durationSec != null ? durationSec * 1000 : FREEFORM_MAX_RUN_MS;
+      if (isFreeform) {
+        userLayer.clear();
       } else {
-        currentPattern = patternFromModeId(modeId);
+        // Each run picks the next pattern so multi-run sessions cycle through
+        if (idx > 0) {
+          const startIdx = PATTERN_NAMES.indexOf(patternFromModeId(modeId));
+          currentPattern = PATTERN_NAMES[(startIdx + idx) % PATTERN_NAMES.length];
+        } else {
+          currentPattern = patternFromModeId(modeId);
+        }
+        regeneratePattern();
       }
-      regeneratePattern();
     },
     setRL(next) {
       oo = Math.max(0, Math.min(100, next));
-      // Only redraw when a run is active — before training starts, OO may be
-      // noisy EEG data, causing the template alpha to flicker on every 100 ms
-      // broadcast even though the player hasn't started yet.
-      if (!noFeedback && runIndex >= 0) drawTemplate();
+      if (!isFreeform && !noFeedback && runIndex >= 0) drawTemplate();
     },
     onInput(_event: GameInputEvent) {
       /* Zentangle is pointer-driven; no remote input events in M1. */

@@ -323,17 +323,62 @@ export const SubjectWindowRoot: FC = () => {
         </div>
       )}
 
-      {/* ── Dual baseball scoreboard ── */}
+      {/* ── Dual baseball: scoreboard (center) + RL cards (left/right) ── */}
       {isDualBaseball && (
-        <DualScoreboard
-          teamA={stats.dualTeamAName!}
-          teamB={stats.dualTeamBName!}
-          runsA={stats.dualTeamARuns ?? []}
-          runsB={stats.dualTeamBRuns ?? []}
-          isBottom={stats.dualIsBottomHalf ?? false}
-          currentInning={stats.dualCurrentInning ?? 1}
-          inningTotal={stats.dualInningTotal ?? 9}
-        />
+        <>
+          {/* Team A RL — top-left */}
+          <div style={{
+            position: 'fixed', top: 14, left: 14, zIndex: 21, pointerEvents: 'none',
+          }}>
+            <div style={{
+              ...HUD_PANEL_STYLE, textAlign: 'center', minWidth: 100, padding: '8px 14px',
+              borderColor: !stats.dualIsBottomHalf ? 'rgba(126,232,198,0.5)' : 'rgba(130,190,255,0.2)',
+            }}>
+              <div style={{ ...HUD_LABEL_STYLE, fontSize: 9, color: 'rgba(88,166,255,0.85)' }}>
+                {stats.dualTeamAName ?? 'Team A'}
+                {!stats.dualIsBottomHalf && <span style={{ marginLeft: 4, fontSize: 8, color: 'rgba(126,232,198,0.8)' }}>⚾</span>}
+              </div>
+              <div style={{ ...HUD_VALUE_STYLE, fontSize: 24, color: !stats.dualIsBottomHalf ? '#7ee8c6' : '#88c8ff' }}>
+                {!stats.dualIsBottomHalf ? ooPct : (stats.dualPitcherRL ?? 0)}
+              </div>
+              <div style={{ ...HUD_SUB_STYLE, fontSize: 9 }}>
+                {!stats.dualIsBottomHalf ? ('打者') : ('投手')}
+              </div>
+            </div>
+          </div>
+
+          {/* Scoreboard — top-center */}
+          <DualScoreboard
+            teamA={stats.dualTeamAName!}
+            teamB={stats.dualTeamBName!}
+            runsA={stats.dualTeamARuns ?? []}
+            runsB={stats.dualTeamBRuns ?? []}
+            isBottom={stats.dualIsBottomHalf ?? false}
+            currentInning={stats.dualCurrentInning ?? 1}
+            inningTotal={stats.dualInningTotal ?? 9}
+          />
+
+          {/* Team B RL — top-right */}
+          <div style={{
+            position: 'fixed', top: 14, right: 14, zIndex: 21, pointerEvents: 'none',
+          }}>
+            <div style={{
+              ...HUD_PANEL_STYLE, textAlign: 'center', minWidth: 100, padding: '8px 14px',
+              borderColor: stats.dualIsBottomHalf ? 'rgba(250,180,100,0.5)' : 'rgba(130,190,255,0.2)',
+            }}>
+              <div style={{ ...HUD_LABEL_STYLE, fontSize: 9, color: 'rgba(250,140,80,0.85)' }}>
+                {stats.dualTeamBName ?? 'Team B'}
+                {stats.dualIsBottomHalf && <span style={{ marginLeft: 4, fontSize: 8, color: 'rgba(250,180,100,0.8)' }}>⚾</span>}
+              </div>
+              <div style={{ ...HUD_VALUE_STYLE, fontSize: 24, color: stats.dualIsBottomHalf ? '#ffb060' : '#f0a93e' }}>
+                {stats.dualIsBottomHalf ? ooPct : (stats.dualPitcherRL ?? 0)}
+              </div>
+              <div style={{ ...HUD_SUB_STYLE, fontSize: 9 }}>
+                {stats.dualIsBottomHalf ? ('打者') : ('投手')}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {error && (

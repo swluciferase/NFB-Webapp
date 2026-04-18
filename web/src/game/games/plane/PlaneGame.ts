@@ -1,4 +1,4 @@
-import { Graphics, type Application, type Container, type Ticker } from 'pixi.js';
+import { Graphics, Text, TextStyle, type Application, type Container, type Ticker } from 'pixi.js';
 import type { GameInputEvent, GameInstance, GameStatsListener, RunResult, Theme } from '../../Game';
 import { buildPlaneScene, type PlaneScene } from './scene';
 
@@ -34,9 +34,8 @@ const PICKUP_FUEL_THRESHOLD = 3;
 
 // Active mode
 const ENEMY_X_FRACTION = 0.80;
-const MISSILE_FLY_SPEED = 9;
-const AIM_ADJUST_PX = 12;
-const AIM_MAX_OFFSET = 40;
+const MISSILE_FLIGHT_SEC = 10;  // missile takes 10s to reach the enemy
+const AIM_FRACTION = 0.05;     // up/down key adjusts aim by 5% of screen height
 const ENEMY_DRIFT_MS = 800;
 
 interface TrailParticle {
@@ -48,6 +47,9 @@ interface PlayerMissile {
   g: Graphics;
   x: number;
   y: number;
+  startX: number;
+  targetX: number;
+  firedAt: number;   // performance.now() when fired
   active: boolean;
 }
 
@@ -89,6 +91,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
   const balloons: BalloonSprite[] = [];
   let nextBalloonSpawnMs = 0;
   let pickupsCollected = 0;
+  let redBalloonsDodged = 0;
 
   // Active mode — enemy + player missiles
   let enemyG: Graphics | null = null;
@@ -163,7 +166,8 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     hudG.clear();
     const barrelR = 9;
     const spacing = 24;
-    const startX = 20;
+    const totalW = MAX_FUEL * spacing;
+    const startX = (app.screen.width - totalW) / 2 + barrelR;
     const cy = 22;
 
     for (let i = 0; i < MAX_FUEL; i++) {
@@ -234,8 +238,9 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       b.x -= scrollSpeed * dt;
       b.g.x = b.x;
 
-      // Off-screen left
+      // Off-screen left — dodged if red
       if (b.x < -BALLOON_RADIUS * 2) {
+        if (!b.isPickup) redBalloonsDodged++;
         scene.trailLayer.removeChild(b.g);
         b.g.destroy();
         balloons.splice(i, 1);
@@ -259,6 +264,8 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
           fuelLost++;
           flickerUntilMs = now + FLICKER_DURATION_MS;
           if (fuel <= 0) {
+            const dist = Math.round(distanceM);
+            const score = dist + redBalloonsDodged * 10;
             const result: RunResult = {
               runIndex,
               startedAt: runStarted,
@@ -266,11 +273,12 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
               rlSeries,
               qualityPercent: 0,
               isValid: true,
-              gameSpecific: { fuelLost, pickupsCollected, distanceM: Math.round(distanceM) },
+              gameSpecific: { fuelLost, pickupsCollected, redBalloonsDodged, distanceM: dist, score },
             };
             const cb = finishCb;
             finishCb = null;
             runIndex = -1;
+            showEndOverlay(score, false);
             cb?.(result);
             return;
           }
@@ -315,10 +323,12 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     enemyG.y = enemyY;
     enemyG.x = w * ENEMY_X_FRACTION;
 
-    // Player missile flight
+    // Player missile flight — time-based: reaches enemy in MISSILE_FLIGHT_SEC
     if (playerMissile?.active) {
       const pm = playerMissile;
-      pm.x += MISSILE_FLY_SPEED * dt;
+      const flightElapsed = (now - pm.firedAt) / 1000; // seconds since fired
+      const t = Math.min(flightElapsed / MISSILE_FLIGHT_SEC, 1);
+      pm.x = pm.startX + (pm.targetX - pm.startX) * t;
       pm.g.x = pm.x;
 
       const enemyX = enemyG.x;
@@ -404,6 +414,8 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
           groundBounceVel = GROUND_BOUNCE_VEL;
         }
         if (fuel <= 0) {
+          const dist = Math.round(distanceM);
+          const score = dist;
           const result: RunResult = {
             runIndex,
             startedAt: runStarted,
@@ -411,11 +423,12 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
             rlSeries,
             qualityPercent: 0,
             isValid: true,
-            gameSpecific: { distanceM: Math.round(distanceM), timeAboveMidSec, fuelLost },
+            gameSpecific: { distanceM: dist, timeAboveMidSec, fuelLost, score },
           };
           const cb = finishCb;
           finishCb = null;
           runIndex = -1;
+          showEndOverlay(score, false);
           cb?.(result);
           return;
         }
@@ -502,10 +515,19 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     drawActiveHud();
 
     if (elapsedMs >= RUN_DURATION_MS && finishCb && runIndex >= 0) {
-      const gameSpecific: Record<string, number | boolean> =
-        modeId === 'alternating' ? { fuelLost, pickupsCollected, distanceM: Math.round(distanceM) }
-        : modeId === 'active'    ? { hits: activeHits, misses: activeMisses }
-        : { distanceM: Math.round(distanceM), timeAboveMidSec, fuelLost };
+      const dist = Math.round(distanceM);
+      let score: number;
+      let gameSpecific: Record<string, number | boolean>;
+      if (modeId === 'alternating') {
+        score = dist + redBalloonsDodged * 10;
+        gameSpecific = { fuelLost, pickupsCollected, redBalloonsDodged, distanceM: dist, score };
+      } else if (modeId === 'active') {
+        score = dist + activeHits * 50;
+        gameSpecific = { hits: activeHits, misses: activeMisses, distanceM: dist, score };
+      } else {
+        score = dist;
+        gameSpecific = { distanceM: dist, timeAboveMidSec, fuelLost, score };
+      }
       const result: RunResult = {
         runIndex,
         startedAt: runStarted,
@@ -515,6 +537,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
         isValid: true,
         gameSpecific,
       };
+      showEndOverlay(score, true);
       const cb = finishCb;
       finishCb = null;
       cb(result);
@@ -534,12 +557,75 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
     });
   }
 
+  // ── Game-end overlay ────────────────────────────────────────────────────
+  const endOverlayContainer = new Graphics();
+  endOverlayContainer.visible = false;
+  stage.addChild(endOverlayContainer);
+
+  const endTitleStyle = new TextStyle({
+    fontFamily: '-apple-system, system-ui, sans-serif',
+    fontSize: 36,
+    fontWeight: '800',
+    fill: '#ffffff',
+    align: 'center',
+    dropShadow: { color: '#000000', blur: 8, distance: 0, alpha: 0.6 },
+  });
+  const endScoreStyle = new TextStyle({
+    fontFamily: 'ui-monospace, monospace',
+    fontSize: 48,
+    fontWeight: '800',
+    fill: '#ffd166',
+    align: 'center',
+    dropShadow: { color: '#000000', blur: 8, distance: 0, alpha: 0.6 },
+  });
+  const endSubStyle = new TextStyle({
+    fontFamily: '-apple-system, system-ui, sans-serif',
+    fontSize: 18,
+    fontWeight: '600',
+    fill: 'rgba(200,220,255,0.85)',
+    align: 'center',
+  });
+  const endTitle = new Text({ text: '', style: endTitleStyle });
+  const endScore = new Text({ text: '', style: endScoreStyle });
+  const endSub = new Text({ text: '', style: endSubStyle });
+  endTitle.anchor.set(0.5);
+  endScore.anchor.set(0.5);
+  endSub.anchor.set(0.5);
+  endOverlayContainer.addChild(endTitle, endScore, endSub);
+
+  function showEndOverlay(score: number, goalMet: boolean) {
+    const w = app.screen.width;
+    const h = app.screen.height;
+    endOverlayContainer.clear();
+    endOverlayContainer.roundRect(w * 0.2, h * 0.25, w * 0.6, h * 0.5, 20);
+    endOverlayContainer.fill({ color: 0x0a0f1a, alpha: 0.85 });
+    endOverlayContainer.stroke({ color: 0x58a6ff, width: 2, alpha: 0.4 });
+
+    endTitle.text = goalMet ? '訓練完成' : '回合結束';
+    endTitle.x = w / 2;
+    endTitle.y = h * 0.38;
+
+    endScore.text = `${score}`;
+    endScore.x = w / 2;
+    endScore.y = h * 0.5;
+
+    const label = modeId === 'alternating' ? '距離 + 躲避紅球加分'
+                : modeId === 'active'      ? '距離 + 擊敗敵機加分'
+                : '飛行距離得分';
+    endSub.text = label;
+    endSub.x = w / 2;
+    endSub.y = h * 0.6;
+
+    endOverlayContainer.visible = true;
+  }
+
   app.ticker.add(tick);
 
   // ── Public interface ──────────────────────────────────────────────────────
 
   return {
     startRun(idx, onFinish) {
+      endOverlayContainer.visible = false;
       runIndex = idx;
       runStarted = performance.now();
       scrollX = 0;
@@ -563,6 +649,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       balloons.length = 0;
       nextBalloonSpawnMs = performance.now() + 1500; // first balloon after 1.5s
       pickupsCollected = 0;
+      redBalloonsDodged = 0;
       activeHits = 0;
       activeMisses = 0;
       aimOffset = 0;
@@ -603,20 +690,27 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
           // Fire a missile
           const g = new Graphics();
           g.rect(-12, -3, 24, 6).fill({ color: 0xffcc00 });
-          g.x = scene.plane.x + 20;
-          g.y = scene.plane.y + aimOffset;
+          const sx = scene.plane.x + 20;
+          const sy = scene.plane.y + aimOffset;
+          g.x = sx;
+          g.y = sy;
           scene.trailLayer.addChild(g);
           playerMissile = {
             g,
-            x: scene.plane.x + 20,
-            y: scene.plane.y + aimOffset,
+            x: sx,
+            y: sy,
+            startX: sx,
+            targetX: app.screen.width * ENEMY_X_FRACTION,
+            firedAt: performance.now(),
             active: true,
           };
           canFire = false;
-          // (no setTimeout — tickActive restores canFire on hit/miss)
         } else if (event.type === 'direction') {
-          if (event.dy === -1) aimOffset = Math.max(-AIM_MAX_OFFSET, aimOffset - AIM_ADJUST_PX);
-          if (event.dy === 1)  aimOffset = Math.min(AIM_MAX_OFFSET,  aimOffset + AIM_ADJUST_PX);
+          // Each press adjusts aim by 5% of screen height
+          const step = app.screen.height * AIM_FRACTION;
+          const maxOff = app.screen.height * 0.28; // ± half of sky-to-ground range
+          if (event.dy === -1) aimOffset = Math.max(-maxOff, aimOffset - step);
+          if (event.dy === 1)  aimOffset = Math.min(maxOff,  aimOffset + step);
         }
       }
     },
@@ -633,6 +727,7 @@ export function createPlaneGame(args: PlaneGameArgs): GameInstance {
       if (playerMissile) { playerMissile.g.destroy(); playerMissile = null; }
       if (enemyG) { enemyG.destroy(); enemyG = null; }
       hudG.destroy();
+      endOverlayContainer.destroy({ children: true });
       if (scene) {
         scene.destroy();
         scene = null;

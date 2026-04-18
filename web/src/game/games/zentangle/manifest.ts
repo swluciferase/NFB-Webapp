@@ -16,6 +16,7 @@ export const zentangleManifest: GameManifest = {
     { id: 'compass',   name: { zh: '羅盤',     en: 'Compass Rose' }, taskLoad: 'single' },
     { id: 'honeycomb', name: { zh: '蜂巢',     en: 'Honeycomb'    }, taskLoad: 'single' },
     { id: 'lotus',     name: { zh: '蓮花',     en: 'Lotus'        }, taskLoad: 'single' },
+    { id: 'freeform',  name: { zh: '自由創作', en: 'Freeform'     }, taskLoad: 'single' },
   ],
   async load(): Promise<GameFactory> {
     const { createZentangleGame } = await import('./ZentangleGame');
@@ -29,6 +30,8 @@ export const zentangleManifest: GameManifest = {
         .__zentangleTargetPct ?? 80;
       const noFeedback = (args.container as unknown as { __zentangleNoFeedback?: boolean })
         .__zentangleNoFeedback ?? false;
+      const paletteId  = (args.container as unknown as { __zentanglePaletteId?: string })
+        .__zentanglePaletteId;
       return createZentangleGame({
         app:        app as Parameters<typeof createZentangleGame>[0]['app'],
         stage:      stage as Parameters<typeof createZentangleGame>[0]['stage'],
@@ -36,6 +39,7 @@ export const zentangleManifest: GameManifest = {
         modeId:     args.modeId,
         targetPct,
         noFeedback,
+        paletteId,
         onStats:    args.onStats,
       });
     };

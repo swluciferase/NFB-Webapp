@@ -37,6 +37,12 @@ export interface BaseballScene {
   setLineScore(inningRuns: readonly number[], currentInning: number, currentBatter: number): void;
   /** Swap in a new batter with a handedness-flipping slide-in animation. */
   switchBatter(hand: 'L' | 'R'): void;
+  /** Hide the in-scene scoreboard (used in dual mode where React renders its own). */
+  hideScoreboard(): void;
+  /** Swap pitcher/batter uniform colors for dual mode half-inning changes. */
+  setTeamColors(isBottom: boolean): void;
+  /** Show a "比賽結束" end overlay with team scores. */
+  showEndOverlay(teamA: string, scoreA: number, teamB: string, scoreB: number): void;
   destroy(): void;
 }
 
@@ -68,6 +74,7 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
     scoreboard: new Container(),
     resultFlash: new Container(),
     vignette: new Container(),
+    endOverlay: new Container(),
   };
   for (const k of Object.keys(layers) as Array<keyof typeof layers>) {
     root.addChild(layers[k]);
@@ -274,6 +281,14 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
   let batterHand: 'L' | 'R' = 'R';
   let batterAnimActive = false;
   let batterAnimStart = 0;
+
+  // Team uniform colors (swapped on half-inning change in dual mode)
+  // Default: pitcher=blue (Team A), batter=red (Team B)
+  let pitcherJersey = 0xe4ecfa;
+  let pitcherStripe = 0x58a6ff;
+  let pitcherCap    = 0x1a2a44;
+  let batterJersey  = 0xe63946;
+  let batterStripe  = 0xf28a93;
   const BATTER_ANIM_MS = 600;
 
   // Result flash overlay
@@ -311,6 +326,34 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
   let countdownValue: number | null = null;
 
   let resultFlashExpiry = 0;
+
+  // End overlay — "比賽結束" + final score
+  const endOverlay = new Container();
+  const endBg = new Graphics();
+  const endTitle = new Text({
+    text: '比賽結束',
+    style: new TextStyle({
+      fill: 0xffe27a,
+      fontSize: 72,
+      fontWeight: '900',
+      letterSpacing: 6,
+      stroke: { color: 0x0a0f1a, width: 6, alpha: 0.8 },
+    }),
+  });
+  endTitle.anchor.set(0.5);
+  const endScore = new Text({
+    text: '',
+    style: new TextStyle({
+      fill: 0xe4ecfa,
+      fontSize: 36,
+      fontWeight: '700',
+      align: 'center',
+    }),
+  });
+  endScore.anchor.set(0.5);
+  endOverlay.addChild(endBg, endTitle, endScore);
+  endOverlay.visible = false;
+  layers.endOverlay.addChild(endOverlay);
 
   // Cached layout anchors (real diamond positions)
   let W = 0;
@@ -670,27 +713,27 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
     // Shadow
     pitcherBody.ellipse(0, 20, 18, 5).fill({ color: 0x000000, alpha: 0.4 });
     // Legs
-    pitcherBody.roundRect(-9, 6, 7, 18, 2).fill({ color: 0x1a2a44 });
-    pitcherBody.roundRect(2, 6, 7, 18, 2).fill({ color: 0x1a2a44 });
+    pitcherBody.roundRect(-9, 6, 7, 18, 2).fill({ color: pitcherCap });
+    pitcherBody.roundRect(2, 6, 7, 18, 2).fill({ color: pitcherCap });
     // Body (jersey)
-    pitcherBody.roundRect(-12, -10, 24, 22, 5).fill({ color: 0xe4ecfa });
-    pitcherBody.roundRect(-12, -10, 24, 6, 3).fill({ color: 0x58a6ff });
+    pitcherBody.roundRect(-12, -10, 24, 22, 5).fill({ color: pitcherJersey });
+    pitcherBody.roundRect(-12, -10, 24, 6, 3).fill({ color: pitcherStripe });
     // Number
     pitcherBody.circle(0, 2, 5).fill({ color: 0x2a3550, alpha: 0.7 });
     // Head
     pitcherBody.circle(0, -18, 8).fill({ color: 0xf5d5a0 });
     // Cap
-    pitcherBody.rect(-9, -22, 18, 5).fill({ color: 0x1a2a44 });
-    pitcherBody.rect(-9, -19, 12, 3).fill({ color: 0x1a2a44 });
+    pitcherBody.rect(-9, -22, 18, 5).fill({ color: pitcherCap });
+    pitcherBody.rect(-9, -19, 12, 3).fill({ color: pitcherCap });
     // Arm (animated by wind-up phase)
     const armAngle = -0.3 + Math.sin(pitcherPhase * Math.PI) * 1.6;
     const ax = Math.cos(armAngle) * 20;
     const ay = Math.sin(armAngle) * 20;
     pitcherBody.moveTo(0, -2)
       .lineTo(ax, ay - 2)
-      .stroke({ width: 5, color: 0xe4ecfa });
+      .stroke({ width: 5, color: pitcherJersey });
     // Glove hand (opposite arm)
-    pitcherBody.circle(-10, 0, 4).fill({ color: 0x1a2a44 });
+    pitcherBody.circle(-10, 0, 4).fill({ color: pitcherCap });
   }
 
   function drawBatter() {
@@ -701,8 +744,8 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
     batterBody.roundRect(-12, 12, 10, 30, 3).fill({ color: 0x2a3550 });
     batterBody.roundRect(2, 12, 10, 30, 3).fill({ color: 0x2a3550 });
     // Body (jersey)
-    batterBody.roundRect(-17, -18, 34, 36, 7).fill({ color: 0xe63946 });
-    batterBody.roundRect(-17, -18, 34, 10, 5).fill({ color: 0xf28a93, alpha: 0.7 });
+    batterBody.roundRect(-17, -18, 34, 36, 7).fill({ color: batterJersey });
+    batterBody.roundRect(-17, -18, 34, 10, 5).fill({ color: batterStripe, alpha: 0.7 });
     // Number
     batterBody.circle(0, -2, 6).fill({ color: 0xffffff, alpha: 0.92 });
     // Head + helmet
@@ -767,6 +810,7 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
 
     switch (hitKind) {
       case 'whiff':
+      case 'calledStrike':
         hitActive = false;
         ball.alpha = 0;
         return;
@@ -1177,7 +1221,7 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
     if (kind === 'homeRun') fill = 0xffe27a;
     else if (kind === 'triple' || kind === 'double') fill = 0x7ee8c6;
     else if (kind === 'single') fill = 0xa0d8ff;
-    else if (kind === 'whiff') fill = 0xf85149;
+    else if (kind === 'whiff' || kind === 'calledStrike') fill = 0xf85149;
     else fill = 0xcccccc;
     resultText.style = new TextStyle({
       ...resultText.style,
@@ -1253,6 +1297,41 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
     hitStartMs = performance.now();
   }
 
+  function hideScoreboard() {
+    layers.scoreboard.visible = false;
+  }
+
+  // Team A = blue/white, Team B = red/pink
+  const TEAM_A_JERSEY = 0xe4ecfa;
+  const TEAM_A_STRIPE = 0x58a6ff;
+  const TEAM_A_CAP    = 0x1a2a44;
+  const TEAM_B_JERSEY = 0xe63946;
+  const TEAM_B_STRIPE = 0xf28a93;
+  const TEAM_B_CAP    = 0x4a1520;
+
+  function setTeamColors(isBottom: boolean) {
+    if (isBottom) {
+      // Bottom half: Team B bats, Team A pitches
+      pitcherJersey = TEAM_A_JERSEY; pitcherStripe = TEAM_A_STRIPE; pitcherCap = TEAM_A_CAP;
+      batterJersey  = TEAM_B_JERSEY; batterStripe  = TEAM_B_STRIPE;
+    } else {
+      // Top half: Team A bats, Team B pitches
+      pitcherJersey = TEAM_B_JERSEY; pitcherStripe = TEAM_B_STRIPE; pitcherCap = TEAM_B_CAP;
+      batterJersey  = TEAM_A_JERSEY; batterStripe  = TEAM_A_STRIPE;
+    }
+    drawPitcher();
+    drawBatter();
+  }
+
+  function showEndOverlay(teamA: string, scoreA: number, teamB: string, scoreB: number) {
+    endBg.clear();
+    endBg.rect(0, 0, W, H).fill({ color: 0x0a0f1a, alpha: 0.75 });
+    endTitle.position.set(W / 2, H * 0.35);
+    endScore.text = `${teamA}  ${scoreA}  —  ${scoreB}  ${teamB}`;
+    endScore.position.set(W / 2, H * 0.5);
+    endOverlay.visible = true;
+  }
+
   function destroy() {
     root.removeFromParent();
     root.destroy({ children: true });
@@ -1273,6 +1352,9 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
     hitBall,
     setLineScore,
     switchBatter,
+    hideScoreboard,
+    setTeamColors,
+    showEndOverlay,
     destroy,
   };
 }
@@ -1281,6 +1363,7 @@ export function buildBaseballScene(theme: Theme, ballpark: Ballpark): BaseballSc
 
 const RESULT_TEXT: Record<BaseballHitKind, { zh: string; en: string }> = {
   whiff: { zh: '揮棒落空', en: 'WHIFF' },
+  calledStrike: { zh: '好球', en: 'CALLED STRIKE' },
   groundOut: { zh: '滾地出局', en: 'GROUND OUT' },
   popFly: { zh: '高飛出局', en: 'POP OUT' },
   deepFlyOut: { zh: '深遠飛球接殺', en: 'DEEP FLY OUT' },

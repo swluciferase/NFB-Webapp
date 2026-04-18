@@ -33,6 +33,9 @@ export interface SessionConfig {
   // Set when gameId === 'zentangle'. When true, RL does not affect template
   // visibility — the pattern is shown at a fixed opacity for pure art practice.
   noFeedback?: boolean;
+  // Set when gameId === 'zentangle' && modeId === 'freeform'.
+  // Palette ID for RL-driven color interpolation.
+  paletteId?: string;
   // Set when gameId === 'baseball' && modeId === 'dual'.
   dualTeamA?: string;  // Team A display name (defaults to 'Team A')
   dualTeamB?: string;  // Team B display name (defaults to 'Team B')
@@ -54,5 +57,7 @@ export interface SessionReport {
   runs: RunResult[];
   validRunsCount: number;
   avgRL: number;
+  /** Last known TA (threshold) value broadcast during the session. */
+  lastTa?: number;
   nfbSettingsSnapshot: NfbSettings;
 }

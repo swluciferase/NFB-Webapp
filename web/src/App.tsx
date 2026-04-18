@@ -26,6 +26,7 @@ import {
   updateRegistrySteegId,
 } from './services/deviceRegistry';
 import { wasmService } from './services/wasm';
+import { nfbLiveStore } from './services/nfbLiveStore';
 import type {
   SubjectInfo,
   FilterParams,
@@ -216,6 +217,9 @@ function App() {
     goodPercent,
     shouldAutoStop,
   } = useQualityMonitor(latestPackets, isRecording, qualityConfig);
+
+  // Sync deviceId to nfbLiveStore so cross-tab RL relay includes our steegId
+  useEffect(() => { nfbLiveStore.setSteegId(deviceId); }, [deviceId]);
 
   // After connection: set device ID from WebUSB productName (only if not already set by modal)
   useEffect(() => {

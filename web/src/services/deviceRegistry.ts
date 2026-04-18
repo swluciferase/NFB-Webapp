@@ -109,6 +109,16 @@ export function getOtherTabDevices(): RegistryEntry[] {
   return readStorage().filter(e => e.tabId !== tabId);
 }
 
+/** All entries INCLUDING this tab. Stale entries filtered. */
+export function getAllDevices(): RegistryEntry[] {
+  return readStorage();
+}
+
+/** This tab's ID. */
+export function getMyTabId(): string {
+  return getTabId();
+}
+
 /** Register this tab as connected. Call once immediately after connect. */
 export function registerConnected(steegId: string | null = null): void {
   const tabId = getTabId();

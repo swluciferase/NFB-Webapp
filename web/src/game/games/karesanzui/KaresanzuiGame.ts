@@ -667,7 +667,7 @@ export function createKaresanzuiGame(args: KaresanzuiGameArgs): GameInstance {
 
   // ── GameInstance interface ────────────────────────────────────────────────
   return {
-    startRun(idx: number, onFinish: (r: RunResult) => void) {
+    startRun(idx: number, onFinish: (r: RunResult) => void, _runDurationSec?: number) {
       runIndex    = idx;
       runStarted  = performance.now();
       runFinished = false;

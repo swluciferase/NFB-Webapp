@@ -6,10 +6,10 @@ export const GAME_PROTOCOL_VERSION = 1;
 export type GameChannelMessage =
   // main → subject
   | { kind: 'hello';          sessionId: string; protocolVersion: number }
-  | { kind: 'loadGame';       gameId: GameId; modeId: string; themeId: Theme['id']; lang: Lang; plannedInnings?: number; plannedCoveragePct?: number; patternId?: string; noFeedback?: boolean; dualTeamA?: string; dualTeamB?: string }
+  | { kind: 'loadGame';       gameId: GameId; modeId: string; themeId: Theme['id']; lang: Lang; plannedInnings?: number; plannedCoveragePct?: number; patternId?: string; noFeedback?: boolean; paletteId?: string; dualTeamA?: string; dualTeamB?: string }
   | { kind: 'preview' }
   | { kind: 'runStart';       runIndex: number; runDurationSec: number; startedAt: number }
-  | { kind: 'rl';             t: number; rl: number; ta: number }
+  | { kind: 'rl';             t: number; rl: number; ta: number; rl2?: number }
   | { kind: 'pause' }
   | { kind: 'resume' }
   | { kind: 'runForceEnd' }
@@ -46,6 +46,10 @@ export function createGameChannel(): GameChannel {
     post(msg) {
       if (closed) return;
       bc.postMessage(msg);
+      // BroadcastChannel doesn't deliver to the sender's own tab, so also
+      // notify local listeners.  This is needed for gameInput (subject window
+      // posts it and its own GameEngine must receive it).
+      for (const l of listeners) l(msg);
     },
     subscribe(listener) {
       listeners.add(listener);

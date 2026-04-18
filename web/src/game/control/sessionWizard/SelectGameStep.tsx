@@ -5,7 +5,7 @@ import type { ThemeId } from '../../Game';
 import { resolveAutoTheme } from '../../themes/registry';
 import { NfbSettingsPanel } from './NfbSettingsPanel';
 import { GamePreview } from './GamePreviewSvg';
-import { getOtherTabDevices, onRegistryChange, type RegistryEntry } from '../../../services/deviceRegistry';
+import { getAllDevices, getMyTabId, onRegistryChange, type RegistryEntry } from '../../../services/deviceRegistry';
 
 // ── Theme choices ──────────────────────────────────────────────────────────
 
@@ -54,6 +54,7 @@ const CARDS: CardDef[] = [
       { id: 'compass',   labelZh: '羅盤',     labelEn: 'Compass Rose' },
       { id: 'honeycomb', labelZh: '蜂巢',     labelEn: 'Honeycomb'    },
       { id: 'lotus',     labelZh: '蓮花',     labelEn: 'Lotus'        },
+      { id: 'freeform',  labelZh: '自由創作', labelEn: 'Freeform'     },
     ],
   },
   {
@@ -93,6 +94,30 @@ const CARDS: CardDef[] = [
       { id: 'winter', labelZh: '冬・梅', labelEn: 'Winter · Plum'   },
     ],
   },
+];
+
+// ── Freeform palette presets (RL low → RL high color) ────────────────────
+
+const FREEFORM_PALETTES: Array<{
+  id: string;
+  labelZh: string;
+  labelEn: string;
+  colorLow: string;   // CSS color at RL=0
+  colorHigh: string;  // CSS color at RL=100
+}> = [
+  // 漸變色系
+  { id: 'ocean',    labelZh: '海洋',   labelEn: 'Ocean',    colorLow: '#1a3a5c', colorHigh: '#7ee8c6' },
+  { id: 'sunset',   labelZh: '落日',   labelEn: 'Sunset',   colorLow: '#4a1942', colorHigh: '#ffd166' },
+  { id: 'forest',   labelZh: '森林',   labelEn: 'Forest',   colorLow: '#1a2e1a', colorHigh: '#88e088' },
+  { id: 'sakura',   labelZh: '櫻花',   labelEn: 'Sakura',   colorLow: '#3d1f3d', colorHigh: '#ffb7c5' },
+  { id: 'aurora',   labelZh: '極光',   labelEn: 'Aurora',   colorLow: '#0a1a3a', colorHigh: '#c4a0ff' },
+  { id: 'ember',    labelZh: '焰火',   labelEn: 'Ember',    colorLow: '#2a0a0a', colorHigh: '#ff6644' },
+  // 對比色系
+  { id: 'fire_ice',    labelZh: '冰與火', labelEn: 'Fire & Ice',  colorLow: '#2244cc', colorHigh: '#ff3322' },
+  { id: 'coral_teal',  labelZh: '珊瑚青', labelEn: 'Coral Teal',  colorLow: '#008080', colorHigh: '#ff6f61' },
+  { id: 'violet_lime', labelZh: '紫萊姆', labelEn: 'Violet Lime', colorLow: '#88cc22', colorHigh: '#8833cc' },
+  { id: 'gold_navy',   labelZh: '金與藍', labelEn: 'Gold Navy',   colorLow: '#0f1d4a', colorHigh: '#ffc832' },
+  { id: 'rose_cyan',   labelZh: '玫瑰青', labelEn: 'Rose Cyan',   colorLow: '#00cccc', colorHigh: '#e63370' },
 ];
 
 const KARESANZUI_PATTERNS: Array<{ id: string; labelZh: string; labelEn: string }> = [
@@ -146,6 +171,12 @@ const MODE_DESC: Partial<Record<CardDef['id'], Record<string, { zh: string; en: 
     active: {
       zh: '畫面右側隨機高度出現靜止敵機。按 Space 發射飛彈（一次一發）；上/下方向鍵可在 ±40px 範圍內微調瞄準線，需先靠回饋值把飛機移到接近敵機的高度。擊中敵機立即重生於新高度；飛彈落空則敵機緩慢漂移到新位置。',
       en: 'A stationary enemy plane appears at a random height on the right. Press Space to fire a missile (one at a time); use Up/Down to fine-tune aim within ±40px — you must use RL to first bring the plane close to the enemy\'s altitude. A hit immediately respawns the enemy at a new height; a miss causes it to drift slowly to a new position.',
+    },
+  },
+  zentangle: {
+    freeform: {
+      zh: '沒有模板——自由創作！筆觸顏色隨回饋值高低即時變化，回饋值越高越接近亮色。訓練結束後會以相框效果展示作品。',
+      en: 'No template — free creation! Stroke color shifts in real-time based on Reward Level: higher RL → brighter color. A framed photo of your artwork is shown at the end.',
     },
   },
   baseball: {
@@ -213,6 +244,7 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
   const [patternId, setPatternId]   = useState<string>('spiral');
   const [themeChoice, setTheme]     = useState<ThemeChoice>('day');
   const [noFeedback, setNoFeedback] = useState(false);
+  const [paletteId, setPaletteId]   = useState('ocean');
 
   // Per-game parameter state (used only for preview; actual start is triggered from TrainingView)
   const [duration, setDuration]     = useState<SessionDurationSec>(300);
@@ -225,12 +257,22 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
   const [dualSerialA, setDualSerialA]     = useState('');
   const [dualSerialB, setDualSerialB]     = useState('');
 
-  // Connected EEG devices (from other tabs in the same browser session)
-  const [connectedDevices, setConnectedDevices] = useState<RegistryEntry[]>(() => getOtherTabDevices());
+  // Connected EEG devices (all tabs including this one)
+  const myTabId = getMyTabId();
+  const [connectedDevices, setConnectedDevices] = useState<RegistryEntry[]>(() => getAllDevices());
   useEffect(() => {
-    setConnectedDevices(getOtherTabDevices());
-    return onRegistryChange(() => setConnectedDevices(getOtherTabDevices()));
-  }, []);
+    const refresh = () => {
+      const devs = getAllDevices();
+      setConnectedDevices(devs);
+      // Auto-assign: own tab → Team A, other tab → Team B
+      const mine = devs.find(d => d.tabId === myTabId);
+      const other = devs.find(d => d.tabId !== myTabId);
+      if (mine) setDualSerialA(prev => prev || mine.steegId || mine.tabId);
+      if (other) setDualSerialB(prev => prev || other.steegId || other.tabId);
+    };
+    refresh();
+    return onRegistryChange(refresh);
+  }, [myTabId]);
 
   // Clear selection when parent requests it (e.g. classic card selected)
   useEffect(() => {
@@ -246,8 +288,8 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
     if (!picked) return;
     const cb = onPreviewRef.current;
     if (!cb) return;
-    cb(assembleConfig(picked, modeId, patternId, themeChoice, noFeedback, duration, innings, coveragePct, lang, dualTeamAName, dualTeamBName, dualSerialA, dualSerialB));
-  }, [picked, modeId, patternId, themeChoice, noFeedback, duration, innings, coveragePct, lang, dualTeamAName, dualTeamBName, dualSerialA, dualSerialB]);
+    cb(assembleConfig(picked, modeId, patternId, themeChoice, noFeedback, paletteId, duration, innings, coveragePct, lang, dualTeamAName, dualTeamBName, dualSerialA, dualSerialB));
+  }, [picked, modeId, patternId, themeChoice, noFeedback, paletteId, duration, innings, coveragePct, lang, dualTeamAName, dualTeamBName, dualSerialA, dualSerialB]);
 
   const pickedCard = CARDS.find((c) => c.id === picked);
   const themeList  = picked === 'baseball' ? BASEBALL_THEMES : PLANE_THEMES;
@@ -366,11 +408,15 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
           <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(200,215,235,0.7)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
             {lang === 'zh' ? '隊伍設定' : 'Team Setup'}
           </div>
-          {connectedDevices.length === 0 && (
+          {connectedDevices.length < 2 && (
             <div style={{ fontSize: 12, color: 'rgba(200,215,235,0.45)', marginBottom: 10 }}>
               {lang === 'zh'
-                ? '目前無已連線設備。請先在各隊的瀏覽器分頁連線 EEG 設備，再回此頁選擇。'
-                : 'No connected devices found. Open EEG tabs for each team, connect their devices, then return here to select.'}
+                ? connectedDevices.length === 0
+                  ? '請先連線 EEG 設備。第二組設備請開啟另一個 SoraMynd 分頁連線並設定 NFB 指標。'
+                  : '已偵測到本機設備 (Team A)。請開啟另一個 SoraMynd 分頁連線第二組 EEG 設備作為 Team B。'
+                : connectedDevices.length === 0
+                  ? 'Connect an EEG device first. For the 2nd device, open another SoraMynd tab and set up NFB indicators.'
+                  : 'Local device detected (Team A). Open another SoraMynd tab and connect the 2nd EEG device for Team B.'}
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -404,11 +450,16 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
                 }}
               >
                 <option value="">{lang === 'zh' ? '— 選擇 EEG 設備 —' : '— Select EEG device —'}</option>
-                {connectedDevices.map((d) => (
-                  <option key={d.tabId} value={d.steegId ?? d.tabId}>
-                    {d.steegId ?? `Tab ${d.tabId.slice(0, 6)}`}
-                  </option>
-                ))}
+                {connectedDevices.map((d) => {
+                  const isMe = d.tabId === myTabId;
+                  const label = d.steegId ?? `Tab ${d.tabId.slice(0, 6)}`;
+                  const tag = isMe ? (lang === 'zh' ? ' (本機)' : ' (local)') : (lang === 'zh' ? ' (遠端)' : ' (remote)');
+                  return (
+                    <option key={d.tabId} value={d.steegId ?? d.tabId}>
+                      {label}{tag}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             {/* Team B */}
@@ -440,12 +491,17 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
                   outline: 'none', fontFamily: 'ui-monospace, monospace', cursor: 'pointer',
                 }}
               >
-                <option value="">{lang === 'zh' ? '— 選擇 EEG 設備 —' : '— Select EEG device —'}</option>
-                {connectedDevices.map((d) => (
-                  <option key={d.tabId} value={d.steegId ?? d.tabId}>
-                    {d.steegId ?? `Tab ${d.tabId.slice(0, 6)}`}
-                  </option>
-                ))}
+                <option value="">{lang === 'zh' ? '— 等待第二組設備 —' : '— Waiting for 2nd device —'}</option>
+                {connectedDevices.map((d) => {
+                  const isMe = d.tabId === myTabId;
+                  const label = d.steegId ?? `Tab ${d.tabId.slice(0, 6)}`;
+                  const tag = isMe ? (lang === 'zh' ? ' (本機)' : ' (local)') : (lang === 'zh' ? ' (遠端)' : ' (remote)');
+                  return (
+                    <option key={d.tabId} value={d.steegId ?? d.tabId}>
+                      {label}{tag}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
@@ -469,8 +525,8 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
         </div>
       )}
 
-      {/* ── Zentangle no-feedback toggle ── */}
-      {picked === 'zentangle' && (
+      {/* ── Zentangle no-feedback toggle (not for freeform) ── */}
+      {picked === 'zentangle' && modeId !== 'freeform' && (
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
             <input
@@ -485,6 +541,40 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
                 : 'No feedback (pattern shown at fixed opacity, OO does not affect tracing)'}
             </span>
           </label>
+        </div>
+      )}
+
+      {/* ── Freeform palette picker ── */}
+      {picked === 'zentangle' && modeId === 'freeform' && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: 'rgba(200,215,235,0.6)', marginBottom: 6 }}>
+            {lang === 'zh' ? '色系' : 'Color Palette'}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {FREEFORM_PALETTES.map((p) => {
+              const selected = paletteId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setPaletteId(p.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 12px', borderRadius: 8,
+                    border: `1.5px solid ${selected ? '#58a6ff' : 'rgba(93,109,134,0.3)'}`,
+                    background: selected ? 'rgba(88,166,255,0.12)' : 'transparent',
+                    color: selected ? '#fff' : 'rgba(200,215,235,0.7)',
+                    cursor: 'pointer', fontSize: 12, fontWeight: selected ? 700 : 500,
+                  }}
+                >
+                  <span style={{
+                    display: 'inline-block', width: 32, height: 14, borderRadius: 4,
+                    background: `linear-gradient(90deg, ${p.colorLow}, ${p.colorHigh})`,
+                  }} />
+                  {lang === 'zh' ? p.labelZh : p.labelEn}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -505,7 +595,7 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
       )}
 
       {/* ── Per-game parameter picker ── */}
-      {picked === 'plane' && (
+      {(picked === 'plane' || (picked === 'zentangle' && modeId === 'freeform')) && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, color: 'rgba(200,215,235,0.6)', marginBottom: 6 }}>
             {lang === 'zh' ? '訓練時長' : 'Duration'}
@@ -540,7 +630,7 @@ export const SelectGameStep: FC<SelectGameStepProps> = ({ lang, onPreview, onGam
         </div>
       )}
 
-      {picked === 'zentangle' && (
+      {picked === 'zentangle' && modeId !== 'freeform' && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, color: 'rgba(200,215,235,0.6)', marginBottom: 6 }}>
             {lang === 'zh' ? '目標完成度' : 'Target Coverage'}
@@ -600,6 +690,7 @@ function assembleConfig(
   patternId: string,
   themeChoice: ThemeChoice,
   noFeedback: boolean,
+  paletteId: string,
   duration: SessionDurationSec,
   innings: SessionInningCount,
   coveragePct: SessionCoveragePct,
@@ -621,7 +712,12 @@ function assembleConfig(
     }
     return cfg;
   }
-  if (gameId === 'zentangle')   return { ...base, plannedCoveragePct: coveragePct, noFeedback };
+  if (gameId === 'zentangle') {
+    if (modeId === 'freeform') {
+      return { ...base, plannedDurationSec: duration, paletteId };
+    }
+    return { ...base, plannedCoveragePct: coveragePct, noFeedback };
+  }
   if (gameId === 'karesansui')  return { ...base, plannedCoveragePct: 100 as const, patternId };
   return { ...base, plannedDurationSec: duration };
 }

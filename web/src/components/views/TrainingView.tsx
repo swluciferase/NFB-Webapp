@@ -12,14 +12,16 @@ import {
 } from '../../services/nfbSettingsStore';
 import { nfbLiveStore } from '../../services/nfbLiveStore';
 import { normEngineService } from '../../services/normEngineService';
-import { computeQeegZScores, getChannelBandZ, type ZScoreResult } from '../../services/qeegZScoreService';
+import { CHBMP_LABELS, computeQeegZScores, getChannelBandZ, type ZScoreResult } from '../../services/qeegZScoreService';
+
+const CHBMP_LABELS_SORA = CHBMP_LABELS as readonly string[];
 
 // ── Z-Score DB options ──────────────────────────────────────────────────────
 const ZSCORE_DBS = [
-  { id: 'chbmp_v1', label: 'CHBMP',   enabled: true  },
-  { id: 'hbn_v1',   label: 'HBN',     enabled: false },
-  { id: 'temple_u', label: 'TempleU', enabled: false },
-  { id: 'twn_v1',   label: 'TWN',     enabled: false },
+  { id: 'chbmp_v1', label: 'CHBMP',   ageRange: '5-87',  enabled: true  },
+  { id: 'hbn_v1',   label: 'HBN',     ageRange: '5-21',  enabled: false },
+  { id: 'temple_u', label: 'TempleU', ageRange: '18-90', enabled: false },
+  { id: 'twn_v1',   label: 'TWN',     ageRange: '20-80', enabled: false },
 ] as const;
 
 type MetricMode = 'power' | 'zscore';
@@ -1806,6 +1808,45 @@ export const TrainingView: FC<TrainingViewProps> = ({
 
       {/* ── Column 1: EEG odd (#1 #3 #5) ── */}
       <div style={colStyle}>
+        {/* Metric mode mini-toggle (Power | Z-Score) — Z-Score gates on age */}
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>指標模式 Metric Mode</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['power', 'zscore'] as MetricMode[]).map(m => {
+              const zsDisabled = m === 'zscore' && (subjectAge <= 0 || !normReady);
+              const active = metricMode === m;
+              return (
+                <button
+                  key={m}
+                  onClick={() => {
+                    if (zsDisabled) return;
+                    setMetricMode(m);
+                    if (m === 'zscore' && subjectAge > 0) {
+                      normEngineService.switchDb(zScoreDb).then(() => setNormReady(normEngineService.isReady())).catch(console.warn);
+                    }
+                  }}
+                  disabled={zsDisabled}
+                  title={zsDisabled ? '請先在右欄填寫受測者年齡才能啟用 Z-Score' : ''}
+                  style={{
+                    flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    border: `1px solid ${active ? 'rgba(232,160,32,0.6)' : 'var(--border)'}`,
+                    background: active ? 'rgba(232,160,32,0.15)' : 'var(--bg-raised, var(--bg-secondary))',
+                    color: zsDisabled ? 'rgba(100,115,135,0.5)' : active ? '#e8a020' : 'var(--text-secondary)',
+                    cursor: zsDisabled ? 'not-allowed' : 'pointer',
+                    opacity: zsDisabled ? 0.55 : 1,
+                  }}
+                >
+                  {m === 'power' ? '功率 Power' : 'Z 分數 Z-Score'}
+                </button>
+              );
+            })}
+          </div>
+          {metricMode === 'zscore' && (
+            <div style={{ fontSize: 10, color: 'var(--text-muted, rgba(140,160,180,0.65))', marginTop: 6 }}>
+              CHBMP · 適用 5-87 歲 · {(CHANNEL_LABELS as readonly string[]).filter(c => CHBMP_LABELS_SORA.includes(c)).length}/{CHANNEL_LABELS.length} ch
+            </div>
+          )}
+        </div>
         {oddIndicators.map(ind => ind.id === 5 ? (
           <FormulaCard
             key={ind.id}
@@ -1908,9 +1949,13 @@ export const TrainingView: FC<TrainingViewProps> = ({
                       color: !db.enabled ? 'rgba(100,115,135,0.4)' : zScoreDb === db.id ? '#e8a020' : 'var(--text-secondary)',
                       cursor: db.enabled ? 'pointer' : 'default',
                       fontSize: 12, fontWeight: 600,
+                      display: 'flex', flexDirection: 'column', gap: 2,
                     }}
                   >
-                    {db.label}
+                    <span>{db.label}</span>
+                    <span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(140,160,180,0.6)', letterSpacing: '0.02em' }}>
+                      適用 {db.ageRange} 歲
+                    </span>
                   </button>
                 ))}
               </div>

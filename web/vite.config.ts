@@ -4,7 +4,14 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.3.0'
+const APP_VERSION = '1.4.0'
+// v1.4.0 — feat: Z-Score metric mode visibility + CHBMP default-on label.
+//   • TrainingView Column 1 gains a "指標模式 / Metric Mode" mini-toggle
+//     above EegCards (Power | Z-Score), mirroring Poseidon. Z-Score gates
+//     on subjectAge (set in Column 4 panel).
+//   • CHBMP DB chips now display "適用 5-87 歲" (and equivalents for the
+//     four databases) so the applicable age range is visible at a glance.
+//   • CHBMP remains the default selected DB and the only enabled one.
 
 export default defineConfig({
   plugins: [

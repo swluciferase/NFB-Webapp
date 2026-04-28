@@ -4,7 +4,7 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.2.0'
+const APP_VERSION = '1.3.0'
 
 export default defineConfig({
   plugins: [

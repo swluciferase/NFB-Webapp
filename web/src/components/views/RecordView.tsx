@@ -10,6 +10,12 @@ import { analyzeEeg, SAMPLE_RATE } from '../../services/eegReport';
 import { type RppgResults } from '../../services/reportPdf';
 import { openHtmlReport } from '../../services/eegReportHtml';
 import { parseCsv } from '../../services/csvParser';
+import type { UseCameraSessionResult } from '../../hooks/useCameraSession';
+import type { SessionMeta } from '../../types/camera';
+import { writeBlobAsFile, writeJson, writeSessionMeta } from '../../services/camera/fsWriter';
+import { FloatingCameraPanel } from '../camera/FloatingCameraPanel';
+import { BrowserCompatBanner } from '../camera/BrowserCompatBanner';
+import { CameraAdvancedSettings } from '../camera/CameraAdvancedSettings';
 
 const VISIOMYND_URL = `${window.location.origin}/visiomynd`;
 const RPPG_CHANNEL  = 'sgimacog_rppg_sync';
@@ -38,6 +44,8 @@ export interface RecordViewProps {
   shouldAutoStop: boolean;
   /** When 'split', render as two side-by-side columns (B=settings, C=controls) for CI page */
   layout?: 'split';
+  /** Camera + folder session — when provided, EEG CSV writes to the picked folder and cameras can record alongside */
+  cam?: UseCameraSessionResult;
 }
 
 function formatDuration(ms: number): string {
@@ -95,6 +103,7 @@ export const RecordView: FC<RecordViewProps> = ({
   goodPercent,
   shouldAutoStop,
   layout,
+  cam,
 }) => {
   const [elapsed, setElapsed] = useState(0);
   const [reportStatus, setReportStatus] = useState<'idle' | 'analyzing' | 'done' | 'error'>('idle');
@@ -110,6 +119,98 @@ export const RecordView: FC<RecordViewProps> = ({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStoppedRef = useRef(false);
   const rppgChannelRef = useRef<BroadcastChannel | null>(null);
+
+  // Camera + folder ──────────────────────────────────────────────
+  const [showFolderError, setShowFolderError] = useState(false);
+  const [folderErrorMsg, setFolderErrorMsg] = useState('');
+  const [showCamSettings, setShowCamSettings] = useState(false);
+  const [showCamPanel, setShowCamPanel] = useState(true);
+  const recStartTsRef = useRef<number | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+
+  /** Build a deterministic session id from subject + start timestamp. */
+  const buildSessionId = (startedAtMs: number): string => {
+    const sid = (subjectInfo.id || 'subject').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `${sid}-${startedAtMs}`;
+  };
+
+  /** Wrap onStartRecording with optional camera + folder prep. */
+  const handleStartWithCam = async () => {
+    const startedAt = new Date();
+    const epochOriginMs = startedAt.getTime();
+    recStartTsRef.current = epochOriginMs;
+    const sid = buildSessionId(epochOriginMs);
+    sessionIdRef.current = sid;
+    onStartRecording();
+    if (cam?.hasFolder) {
+      try {
+        await cam.prepareSession({ sessionId: sid, startedAt });
+      } catch (err) {
+        console.error('[session] prepareSession failed:', err);
+      }
+    }
+    if (cam?.enabled && cam.rootFolderName) {
+      try {
+        await cam.startAll({ epochOriginMs, sessionId: sid, startedAt });
+      } catch (err) {
+        console.error('[camera] startAll failed:', err);
+        alert(`Camera start failed: ${(err as Error).message}\nEEG recording continues.`);
+      }
+    }
+  };
+
+  /** Write CSV to the picked folder's eeg/ subdir if available; else download. */
+  const saveCsvToFolderOrDownload = async (content: string, filename: string): Promise<void> => {
+    if (cam?.hasFolder && cam.sessionDirHandle) {
+      try {
+        const eegDir = await cam.sessionDirHandle.getDirectoryHandle('eeg', { create: false });
+        const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+        await writeBlobAsFile(eegDir, filename, blob);
+        return;
+      } catch (err) {
+        console.error('[fsa] EEG CSV write failed, falling back to download:', err);
+      }
+    }
+    downloadCsv(content, filename);
+  };
+
+  /** Stop cameras, write session_meta.json with NFB-flavored payload. */
+  const cameraStopAndWriteMeta = async () => {
+    if (!cam) return;
+    const stoppedAt = Date.now();
+    const startTs = recStartTsRef.current;
+    try {
+      const sidecars = cam.enabled ? await cam.stopAll() : [];
+      if (cam.sessionDirHandle && startTs) {
+        const meta: SessionMeta = {
+          schema_version: '1.0',
+          session_id: sessionIdRef.current ?? `local-${startTs}`,
+          app: 'soramynd-nfb',
+          app_version: '1.3.0',
+          created_at_iso: new Date(startTs).toISOString(),
+          epoch_origin_ms: startTs,
+          duration_ms: stoppedAt - startTs,
+          eeg: {
+            devices: [
+              { slot: 'dev1', csv: `eeg/${buildCsvFilename(subjectInfo.id || 'recording', new Date(startTs))}`, sample_rate_hz: SAMPLE_RATE },
+            ],
+          },
+          video: {
+            cameras: sidecars.map((sc) => ({
+              slot: sc.slot,
+              sidecar: `video/${sc.slot}_video.json`,
+            })),
+          },
+        };
+        await writeSessionMeta(cam.sessionDirHandle, meta);
+      }
+    } catch (err) {
+      console.error('[camera] stopAll/meta failed:', err);
+    }
+    recStartTsRef.current = null;
+    sessionIdRef.current = null;
+  };
+  void writeJson; // reserved for future per-marker exports
 
   // ── rPPG BroadcastChannel setup ─────────────────────────────────────────
   useEffect(() => {
@@ -157,7 +258,7 @@ export const RecordView: FC<RecordViewProps> = ({
     rppgChannelRef.current?.postMessage({ type: 'eeg_done' });
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     broadcastEegDone();
     onStopRecording();
     if (recordedSamples.length > 0 && startTime) {
@@ -169,14 +270,16 @@ export const RecordView: FC<RecordViewProps> = ({
         notchDesc,
       );
       const filename = buildCsvFilename(subjectInfo.id || 'recording', startTime);
-      downloadCsv(content, filename);
+      await saveCsvToFolderOrDownload(content, filename);
     }
+    void cameraStopAndWriteMeta();
   };
 
   // Plain stop — no download
   const handleStopOnly = () => {
     broadcastEegDone();
     onStopRecording();
+    void cameraStopAndWriteMeta();
   };
 
   const handleStopAndReport = async () => {
@@ -196,8 +299,9 @@ export const RecordView: FC<RecordViewProps> = ({
         notchDesc,
       );
       const filename = buildCsvFilename(subjectInfo.id || 'recording', startTime);
-      downloadCsv(content, filename);
+      await saveCsvToFolderOrDownload(content, filename);
     }
+    void cameraStopAndWriteMeta();
     // Run EEG analysis asynchronously
     broadcastEegDone();
     setReportStatus('analyzing');
@@ -434,6 +538,104 @@ export const RecordView: FC<RecordViewProps> = ({
         )}
       </div>
 
+      {/* Save Folder + Camera cards (port from sgimacog v1.5.1) */}
+      {cam && cam.fsAvailable && (
+        <div style={cardStyle}>
+          {stitle('α', T(lang, 'camSaveFolderTitle'))}
+          <div className="cam-rig-body" style={{ marginBottom: 0 }}>
+            <button
+              type="button"
+              className={`cam-pill${cam.rootFolderName ? ' has-folder' : ''}`}
+              onClick={async () => {
+                try {
+                  await cam.pickFolder();
+                } catch (err) {
+                  const ex = err as DOMException;
+                  if (ex?.name === 'AbortError') return;
+                  setFolderErrorMsg(ex?.message ?? String(err));
+                  setShowFolderError(true);
+                }
+              }}
+              disabled={isRecording}
+            >
+              <span className="cam-pill-glyph">∂</span>
+              {cam.rootFolderName ?? T(lang, 'camSaveFolderPick')}
+            </button>
+            <span style={{
+              fontSize: '.58rem',
+              letterSpacing: '.04em',
+              color: cam.rootFolderName ? 'var(--green)' : 'var(--muted)',
+              fontFamily: "'IBM Plex Mono', monospace",
+              flex: 1,
+            }}>
+              {cam.rootFolderName ? T(lang, 'camSaveFolderHintSet') : T(lang, 'camSaveFolderHintNone')}
+            </span>
+          </div>
+        </div>
+      )}
+      {cam && !cam.fsAvailable && (
+        <BrowserCompatBanner lang={lang} />
+      )}
+      {cam && cam.fsAvailable && (
+        <div style={cardStyle}>
+          {stitle('β', T(lang, 'camCardTitle'))}
+          <div className="cam-rig-body" style={{ marginBottom: 0 }}>
+            <label className={`cam-check${isRecording ? ' disabled' : ''}`}>
+              <input
+                type="checkbox"
+                checked={cam.enabled}
+                disabled={isRecording}
+                onChange={async (e) => {
+                  const wantOn = e.target.checked;
+                  if (!wantOn) { cam.setEnabled(false); return; }
+                  if (!cam.hasFolder) {
+                    try {
+                      await cam.pickFolder();
+                    } catch (err) {
+                      const ex = err as DOMException;
+                      if (ex?.name === 'AbortError') return;
+                      setFolderErrorMsg(ex?.message ?? String(err));
+                      setShowFolderError(true);
+                      return;
+                    }
+                  }
+                  cam.setEnabled(true);
+                }}
+              />
+              <span className="cam-check-box" />
+              <span>{T(lang, 'camEnable')}</span>
+            </label>
+            <button
+              type="button"
+              className="cam-pill"
+              onClick={() => setShowCamSettings(true)}
+              disabled={!cam.enabled}
+            >
+              <span className="cam-pill-glyph">⚙</span>
+              {T(lang, 'camAdvanced')}
+            </button>
+            {cam.enabled && cam.rootFolderName && (
+              <span className="cam-ready">
+                <span className="cam-ready-count">
+                  {Object.values(cam.slots).filter((s) => s.deviceId).length}
+                </span>
+                <span>/4 · {T(lang, 'camReady')}</span>
+              </span>
+            )}
+            {!cam.hasFolder && !cam.enabled && (
+              <span style={{
+                fontSize: '.56rem',
+                color: 'var(--muted)',
+                fontFamily: "'IBM Plex Mono', monospace",
+                letterSpacing: '.04em',
+              }}>
+                {T(lang, 'camFolderRequiredHint')}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Filter · VisioMynd card */}
       <div style={cardStyle}>
         {stitle('⌗', lang === 'zh' ? '濾波 · VisioMynd' : 'Filter · VisioMynd')}
@@ -658,7 +860,7 @@ export const RecordView: FC<RecordViewProps> = ({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.3rem', marginBottom: '.3rem' }}>
           {/* Start */}
           {!isRecording && (
-            <button onClick={() => { if (enableRppg) openVisioMynd(); onStartRecording(); }}
+            <button onClick={() => { if (enableRppg) openVisioMynd(); void handleStartWithCam(); }}
               disabled={!isConnected}
               style={{
                 gridColumn: '1 / -1',
@@ -757,6 +959,76 @@ export const RecordView: FC<RecordViewProps> = ({
     </>
   );
 
+  // Folder-error modal + advanced settings + floating panel — overlays shared by both layouts.
+  const camOverlays = cam ? (
+    <>
+      {showFolderError && (
+        <div className="cam-modal-backdrop" onClick={() => setShowFolderError(false)}>
+          <div className="cam-modal cam-modal-warn" onClick={(ev) => ev.stopPropagation()}>
+            <h3 className="cam-modal-title">{T(lang, 'camFolderErrorTitle')}</h3>
+            <p className="cam-modal-body" style={{ whiteSpace: 'pre-line' }}>
+              {T(lang, 'camFolderErrorBody')}
+            </p>
+            {folderErrorMsg && (
+              <pre style={{
+                fontSize: '.6rem',
+                color: 'var(--muted)',
+                fontFamily: "'IBM Plex Mono', monospace",
+                background: 'rgba(0,0,0,.25)',
+                padding: '.4rem .55rem',
+                borderRadius: 2,
+                margin: '.4rem 0',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}>{folderErrorMsg}</pre>
+            )}
+            <div className="cam-modal-actions">
+              <button
+                className="cam-pill"
+                type="button"
+                onClick={() => {
+                  setShowFolderError(false);
+                  setTimeout(() => {
+                    cam.pickFolder().catch((err) => {
+                      const ex = err as DOMException;
+                      if (ex?.name === 'AbortError') return;
+                      setFolderErrorMsg(ex?.message ?? String(err));
+                      setShowFolderError(true);
+                    });
+                  }, 50);
+                }}
+              >
+                {T(lang, 'camFolderErrorRetry')}
+              </button>
+              <button
+                className="cam-pill"
+                type="button"
+                onClick={() => setShowFolderError(false)}
+              >
+                {T(lang, 'camFolderErrorClose')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CameraAdvancedSettings
+        open={showCamSettings}
+        config={cam.config}
+        activeCameraCount={Object.values(cam.slots).filter((s) => s.deviceId).length}
+        onClose={() => setShowCamSettings(false)}
+        onApply={(c) => { cam.setConfig(c); setShowCamSettings(false); }}
+      />
+
+      <FloatingCameraPanel
+        cam={cam}
+        visible={showCamPanel && cam.enabled}
+        elapsedMs={elapsed}
+        onClose={() => setShowCamPanel(false)}
+      />
+    </>
+  ) : null;
+
   // ════════════════════════════════════════
   // RENDER
   // ════════════════════════════════════════
@@ -771,6 +1043,7 @@ export const RecordView: FC<RecordViewProps> = ({
         <div style={{ ...colStyle, flex: 1 }}>
           {controlsSection}
         </div>
+        {camOverlays}
       </>
     );
   }
@@ -780,6 +1053,7 @@ export const RecordView: FC<RecordViewProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '.6rem .55rem' }}>
       {settingsSection}
       {controlsSection}
+      {camOverlays}
     </div>
   );
 };

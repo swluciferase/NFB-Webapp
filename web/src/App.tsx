@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import './App.css';
+import './cam.css';
 import { Header } from './components/layout/Header';
 import type { PageType } from './components/layout/Header';
 import { SessionBanner } from './components/layout/SessionBanner';
@@ -16,6 +17,7 @@ import { ConnectModal } from './components/modals/ConnectModal';
 import { useEegStream } from './hooks/useEegStream';
 import { useQualityMonitor } from './hooks/useQualityMonitor';
 import type { QualityConfig } from './hooks/useQualityMonitor';
+import { useCameraSession } from './hooks/useCameraSession';
 import { serialService } from './services/serial';
 import type { ConnectionStatus } from './services/serial';
 import { ftdiUsbService, type UsbDeviceLike } from './services/ftdiUsb';
@@ -164,6 +166,9 @@ function App() {
   // ── Event markers (shared between signal + record views) ──
   const [eventMarkers, setEventMarkers] = useState<{ id: string; time: number; label: string }[]>([]);
   const pendingMarkerRef = useRef<{ id: string; time: number; label: string } | null>(null);
+
+  // ── Camera + folder session (port from sgimacog v1.5.1) ──
+  const cam = useCameraSession();
 
   // ── Initialize WASM and wire serial callbacks ──
   useEffect(() => {
@@ -641,6 +646,7 @@ function App() {
               goodTimeSec={goodTimeSec}
               goodPercent={goodPercent}
               shouldAutoStop={shouldAutoStop}
+              cam={cam}
             />
           </div>
         )}

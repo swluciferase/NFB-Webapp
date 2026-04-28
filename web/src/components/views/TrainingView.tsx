@@ -12,9 +12,7 @@ import {
 } from '../../services/nfbSettingsStore';
 import { nfbLiveStore } from '../../services/nfbLiveStore';
 import { normEngineService } from '../../services/normEngineService';
-import { CHBMP_LABELS, computeQeegZScores, getChannelBandZ, type ZScoreResult } from '../../services/qeegZScoreService';
-
-const CHBMP_LABELS_SORA = CHBMP_LABELS as readonly string[];
+import { computeQeegZScores, getChannelBandZ, type ZScoreResult } from '../../services/qeegZScoreService';
 
 // ── Z-Score DB options ──────────────────────────────────────────────────────
 const ZSCORE_DBS = [
@@ -135,6 +133,7 @@ interface EegIndicator {
   history: number[];
   formula: string;   // used by id=5 custom index and preset formulas for #1–4
   presetKey: string; // '' = custom single-band, otherwise key from PRESET_OPTIONS
+  metricMode: MetricMode; // per-card Power | Z-Score (id=5 stays 'power')
 }
 
 type CardiacMetric = 'lfhf' | 'rmssd-t';
@@ -301,7 +300,7 @@ const EegCard: FC<{
   indicator: EegIndicator;
   isLive: boolean;
   liveBandPower?: number[][] | null;
-  metricMode?: MetricMode;
+  metricModeReady: boolean;
   onToggle: (id: number) => void;
   onChannelChange: (id: number, ch: Channel) => void;
   onBandChange: (id: number, b: Band) => void;
@@ -309,7 +308,8 @@ const EegCard: FC<{
   onThresholdChange: (id: number, delta: number) => void;
   onAutoThresholdToggle: (id: number) => void;
   onPresetApply: (id: number, presetKey: string, formula: string, direction: Direction) => void;
-}> = ({ indicator, isLive, liveBandPower, metricMode, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onPresetApply }) => {
+  onMetricModeChange: (id: number, m: MetricMode) => void;
+}> = ({ indicator, isLive, liveBandPower, metricModeReady, onToggle, onChannelChange, onBandChange, onDirectionChange, onThresholdChange, onAutoThresholdToggle, onPresetApply, onMetricModeChange }) => {
   const lang = useLang();
   const aboveThreshold = indicator.value >= indicator.threshold;
   const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
@@ -364,6 +364,22 @@ const EegCard: FC<{
         )}
       </div>
 
+      {/* Metric mode selector — independent per indicator. Z-Score gates on subjectAge + normReady. */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, opacity: activePreset ? 0.35 : 1, pointerEvents: activePreset ? 'none' : 'auto' }}>
+        <select
+          value={indicator.metricMode}
+          onChange={e => onMetricModeChange(indicator.id, e.target.value as MetricMode)}
+          title={!metricModeReady ? '請先在右欄填寫受測者年齡才能啟用 Z-Score' : ''}
+          style={{
+            ...selectStyle,
+            color: indicator.metricMode === 'zscore' ? '#e8a020' : 'var(--text-primary)',
+            borderColor: indicator.metricMode === 'zscore' ? 'rgba(232,160,32,0.55)' : 'var(--border)',
+          }}>
+          <option value="power">功率 Power</option>
+          <option value="zscore" disabled={!metricModeReady}>Z 分數 Z-Score · CHBMP 5–87</option>
+        </select>
+      </div>
+
       {/* Channel + Band selectors — always visible; dimmed when a preset overrides */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, opacity: activePreset ? 0.35 : 1, pointerEvents: activePreset ? 'none' : 'auto' }}>
         <select value={indicator.channel} onChange={e => onChannelChange(indicator.id, e.target.value as Channel)} style={selectStyle}>
@@ -386,7 +402,7 @@ const EegCard: FC<{
       {/* Value display */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
-          {isLive ? indicator.value.toFixed(3) : '—'} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{activePreset ? '' : (metricMode === 'zscore' ? 'Z' : 'μV²')}</span>
+          {isLive ? indicator.value.toFixed(3) : '—'} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{activePreset ? '' : (indicator.metricMode === 'zscore' ? 'Z' : 'μV²')}</span>
         </span>
         <Badge label={met ? 'ON' : 'OFF'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
@@ -1164,6 +1180,7 @@ function makeDefaultIndicators(): EegIndicator[] {
     history: [],
     formula: i === 4 ? 'Fp1_Alpha / (Fp1_Alpha + Fp2_Theta)' : '',
     presetKey: '',
+    metricMode: 'power' as MetricMode,
   }));
 }
 
@@ -1208,7 +1225,6 @@ export const TrainingView: FC<TrainingViewProps> = ({
   const liveBandPowerRef = useRef(liveBandPower);
 
   // ── Z-Score mode state (must be before useEffect/useMemo that reference them) ──
-  const [metricMode, setMetricMode] = useState<MetricMode>('power');
   const [zScoreDb, setZScoreDb]     = useState('chbmp_v1');
   const [subjectAge, setSubjectAge] = useState(0);
   const [zScoreResult, setZScoreResult] = useState<ZScoreResult | null>(null);
@@ -1216,9 +1232,10 @@ export const TrainingView: FC<TrainingViewProps> = ({
 
   useEffect(() => { liveBandPowerRef.current = liveBandPower; }, [liveBandPower]);
 
-  // ── Z-Score computation: runs whenever live band power updates in zscore mode ──
+  // ── Z-Score computation: runs whenever live band power updates and norm is ready ──
+  // (no global metricMode gate — any individual card may be in zscore mode)
   useEffect(() => {
-    if (metricMode !== 'zscore' || subjectAge <= 0 || !liveBandPower) {
+    if (subjectAge <= 0 || !liveBandPower || !normReady) {
       setZScoreResult(null);
       return;
     }
@@ -1229,12 +1246,11 @@ export const TrainingView: FC<TrainingViewProps> = ({
       subjectAge,
     );
     setZScoreResult(result);
-  }, [liveBandPower, metricMode, subjectAge, normReady]);
+  }, [liveBandPower, subjectAge, normReady]);
 
-  // ── evalBandPower: substitutes Z-score values for raw power in formula evaluator ──
-  const evalBandPower = useMemo<number[][] | null>(() => {
-    if (metricMode === 'power' || !zScoreResult || !zScoreResult.valid) return liveBandPower;
-    if (!liveBandPower) return null;
+  // ── zScoreBandPower: full chan×band Z matrix for cards in 'zscore' mode ──
+  const zScoreBandPower = useMemo<number[][] | null>(() => {
+    if (!zScoreResult || !zScoreResult.valid || !liveBandPower) return null;
     return liveBandPower.map((_, chIdx) => {
       const label = (CHANNEL_LABELS as readonly string[])[chIdx] ?? '';
       return NFB_BANDS.map((_, bIdx) => {
@@ -1242,8 +1258,12 @@ export const TrainingView: FC<TrainingViewProps> = ({
         return isNaN(z) ? 0 : z;
       });
     });
-  }, [liveBandPower, metricMode, zScoreResult]);
-  // Ref for stale-closure-safe access inside interval
+  }, [liveBandPower, zScoreResult]);
+  const zScoreBandPowerRef = useRef(zScoreBandPower);
+  useEffect(() => { zScoreBandPowerRef.current = zScoreBandPower; }, [zScoreBandPower]);
+
+  // Raw power matrix for cards in 'power' mode (and for FormulaCard id=5)
+  const evalBandPower = liveBandPower;
   const evalBandPowerRef = useRef(evalBandPower);
   useEffect(() => { evalBandPowerRef.current = evalBandPower; }, [evalBandPower]);
 
@@ -1423,8 +1443,13 @@ export const TrainingView: FC<TrainingViewProps> = ({
       setIndicators(prev => prev.map(ind => {
         if (!ind.enabled) return ind;
         let newVal: number;
+        // Per-card BP selection: zscore mode reads from chan×band Z matrix; power reads raw.
+        // FormulaCard (id=5) and preset formulas always use raw power.
+        const indBP = (ind.metricMode === 'zscore' && !ind.formula)
+          ? (zScoreBandPowerRef.current ?? evalBandPowerRef.current)
+          : evalBandPowerRef.current;
         if (ind.formula) {
-          // Formula evaluation: id=5 FormulaCard + preset formulas for #1–4
+          // Formula evaluation: id=5 FormulaCard + preset formulas for #1–4 (raw power only)
           const rawVal = evalFormula(ind.formula, evalBandPowerRef.current) ?? ind.value;
           // Preset formulas: apply 5-sample moving average (window=5, overlap=4)
           if (ind.presetKey) {
@@ -1434,7 +1459,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
             newVal = rawVal;
           }
         } else {
-          const bp = evalBandPowerRef.current;
+          const bp = indBP;
           const chIdx = CHANNEL_LABELS.indexOf(ind.channel as typeof CHANNEL_LABELS[number]);
           const bandIdx = NFB_BANDS.findIndex((b: { name: string }) => b.name === ind.band);
           const live = (bp && chIdx >= 0 && bandIdx >= 0) ? (bp[chIdx]?.[bandIdx] ?? null) : null;
@@ -1791,6 +1816,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
     letterSpacing: '0.08em', marginBottom: 8, padding: '2px 0', borderBottom: '1px solid var(--border)',
   };
 
+  const metricModeReady = subjectAge > 0 && normReady;
   const eegCardHandlers = {
     onToggle: (id: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i)),
     onChannelChange: (id: number, ch: Channel) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch, presetKey: '', formula: '' } : i)),
@@ -1800,6 +1826,14 @@ export const TrainingView: FC<TrainingViewProps> = ({
     onAutoThresholdToggle: (id: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, autoThreshold: !i.autoThreshold } : i)),
     onPresetApply: (id: number, presetKey: string, formula: string, direction: Direction) =>
       setIndicators(prev => prev.map(i => i.id === id ? { ...i, presetKey, formula, direction } : i)),
+    onMetricModeChange: (id: number, m: MetricMode) => {
+      // SoraMynd's 8 channels (Fp1/Fp2/T7/T8/O1/O2/Cz/Fz) are all CHBMP-19 → no snap needed.
+      // Switching INTO zscore: trigger normEngine load if not ready yet.
+      if (m === 'zscore' && subjectAge > 0 && !normReady) {
+        normEngineService.switchDb(zScoreDb).then(() => setNormReady(normEngineService.isReady())).catch(console.warn);
+      }
+      setIndicators(prev => prev.map(i => i.id === id ? { ...i, metricMode: m } : i));
+    },
   };
 
   return (
@@ -1808,45 +1842,6 @@ export const TrainingView: FC<TrainingViewProps> = ({
 
       {/* ── Column 1: EEG odd (#1 #3 #5) ── */}
       <div style={colStyle}>
-        {/* Metric mode mini-toggle (Power | Z-Score) — Z-Score gates on age */}
-        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', marginBottom: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>指標模式 Metric Mode</div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {(['power', 'zscore'] as MetricMode[]).map(m => {
-              const zsDisabled = m === 'zscore' && (subjectAge <= 0 || !normReady);
-              const active = metricMode === m;
-              return (
-                <button
-                  key={m}
-                  onClick={() => {
-                    if (zsDisabled) return;
-                    setMetricMode(m);
-                    if (m === 'zscore' && subjectAge > 0) {
-                      normEngineService.switchDb(zScoreDb).then(() => setNormReady(normEngineService.isReady())).catch(console.warn);
-                    }
-                  }}
-                  disabled={zsDisabled}
-                  title={zsDisabled ? '請先在右欄填寫受測者年齡才能啟用 Z-Score' : ''}
-                  style={{
-                    flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                    border: `1px solid ${active ? 'rgba(232,160,32,0.6)' : 'var(--border)'}`,
-                    background: active ? 'rgba(232,160,32,0.15)' : 'var(--bg-raised, var(--bg-secondary))',
-                    color: zsDisabled ? 'rgba(100,115,135,0.5)' : active ? '#e8a020' : 'var(--text-secondary)',
-                    cursor: zsDisabled ? 'not-allowed' : 'pointer',
-                    opacity: zsDisabled ? 0.55 : 1,
-                  }}
-                >
-                  {m === 'power' ? '功率 Power' : 'Z 分數 Z-Score'}
-                </button>
-              );
-            })}
-          </div>
-          {metricMode === 'zscore' && (
-            <div style={{ fontSize: 10, color: 'var(--text-muted, rgba(140,160,180,0.65))', marginTop: 6 }}>
-              CHBMP · 適用 5-87 歲 · {(CHANNEL_LABELS as readonly string[]).filter(c => CHBMP_LABELS_SORA.includes(c)).length}/{CHANNEL_LABELS.length} ch
-            </div>
-          )}
-        </div>
         {oddIndicators.map(ind => ind.id === 5 ? (
           <FormulaCard
             key={ind.id}
@@ -1860,14 +1855,18 @@ export const TrainingView: FC<TrainingViewProps> = ({
             onDirectionChange={eegCardHandlers.onDirectionChange}
           />
         ) : (
-          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={evalBandPower} metricMode={metricMode} {...eegCardHandlers} />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive}
+            liveBandPower={ind.metricMode === 'zscore' ? (zScoreBandPower ?? evalBandPower) : evalBandPower}
+            metricModeReady={metricModeReady} {...eegCardHandlers} />
         ))}
       </div>
 
       {/* ── Column 2: EEG even (#2 #4) + Cardiac ── */}
       <div style={colStyle}>
         {evenIndicators.map(ind => (
-          <EegCard key={ind.id} indicator={ind} isLive={isLive} liveBandPower={evalBandPower} metricMode={metricMode} {...eegCardHandlers} />
+          <EegCard key={ind.id} indicator={ind} isLive={isLive}
+            liveBandPower={ind.metricMode === 'zscore' ? (zScoreBandPower ?? evalBandPower) : evalBandPower}
+            metricModeReady={metricModeReady} {...eegCardHandlers} />
         ))}
         <CardiacCard
           state={cardiac}
@@ -1899,38 +1898,11 @@ export const TrainingView: FC<TrainingViewProps> = ({
       {/* ── Column 4: Session Summary ── */}
       <div style={colStyle}>
 
-        {/* ── Z-Score mode controls ── */}
+        {/* ── Z-Score DB + age picker (always visible; per-card dropdowns drive the actual mode) ── */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>指標模式</div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            {(['power', 'zscore'] as MetricMode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => {
-                  setMetricMode(m);
-                  if (m === 'zscore' && subjectAge > 0) {
-                    normEngineService.switchDb(zScoreDb).then(() => setNormReady(normEngineService.isReady())).catch(console.warn);
-                  }
-                }}
-                disabled={m === 'zscore' && (subjectAge <= 0 || !normReady)}
-                style={{
-                  flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  border: `1px solid ${metricMode === m ? 'rgba(232,160,32,0.6)' : 'var(--border)'}`,
-                  background: metricMode === m ? 'rgba(232,160,32,0.15)' : 'var(--bg-raised, var(--bg-secondary))',
-                  color: metricMode === m ? '#e8a020' : 'var(--text-secondary)',
-                  cursor: (m === 'zscore' && (subjectAge <= 0 || !normReady)) ? 'default' : 'pointer',
-                  opacity: (m === 'zscore' && (subjectAge <= 0 || !normReady)) ? 0.5 : 1,
-                }}
-              >
-                {m === 'power' ? '功率模式' : 'Z-Score 模式'}
-              </button>
-            ))}
-          </div>
-
-          {metricMode === 'zscore' && (
-            <div>
+          <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                Z-Score 資料庫
+                Z-Score 資料庫 · 每張 EEG 卡片可獨立切換 Power/Z-Score
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
                 {ZSCORE_DBS.map(db => (
@@ -1981,7 +1953,6 @@ export const TrainingView: FC<TrainingViewProps> = ({
                 )}
               </div>
             </div>
-          )}
         </div>
 
         {/* Progress gauge + stats */}

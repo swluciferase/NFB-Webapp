@@ -4,7 +4,16 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.4.0'
+const APP_VERSION = '1.4.1'
+// v1.4.1 — fix: per-EegCard Power/Z-Score dropdown (4 independent selectors).
+//   • Each EEG#1-4 card now has its own <select> placed directly above the
+//     channel+band row; mode is per-indicator (no global toggle), so users can
+//     mix Power and Z-Score across the four cards.
+//   • Removed the column-1 mini-toggle and column-4 mode-toggle (per-card
+//     dropdowns now drive metric selection); column 4 keeps DB picker + age.
+//   • Z-Score option in each dropdown is disabled until age + norm engine
+//     are ready; SoraMynd's 8 channels (Fp1/Fp2/T7/T8/O1/O2/Cz/Fz) are all
+//     CHBMP-19 so no channel-snap is needed.
 // v1.4.0 — feat: Z-Score metric mode visibility + CHBMP default-on label.
 //   • TrainingView Column 1 gains a "指標模式 / Metric Mode" mini-toggle
 //     above EegCards (Power | Z-Score), mirroring Poseidon. Z-Score gates

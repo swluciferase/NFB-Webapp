@@ -326,6 +326,26 @@ const translations: Record<string, Record<Lang, string>> = {
   bnbMethodGlobalSsbZh: { zh: '單邊帶調制法：兩聲道共用一個載波，以相位差編碼差頻。', en: 'Single-sideband: both channels share one carrier, beat encoded as phase offset.' },
   bnbMethodBandShiftZh: { zh: '每聲道分別以 base ± (beat/2) Hz 播放，產生純頻率差。', en: 'Each channel plays at base ± (beat/2) Hz for a pure frequency difference.' },
   bnbMethodSubLayerZh:  { zh: '載波隱藏於可聽域以下；差頻以振幅包絡進行調製。', en: 'Carrier hidden below audible range; beat modulates amplitude envelope.' },
+
+  // ── Camera + Save Folder ──
+  camSaveFolderTitle:    { zh: '儲存資料夾', en: 'Save Folder' },
+  camSaveFolderHintNone: { zh: '未指定資料夾，EEG CSV 將下載到瀏覽器預設位置', en: 'No folder picked — EEG CSV will go to browser Downloads' },
+  camSaveFolderHintSet:  { zh: '所有 EEG / 攝影機檔案會儲存到此資料夾下的工作階段子目錄', en: 'EEG + camera files will be written to a session subfolder under this folder' },
+  camSaveFolderPick:     { zh: '選擇資料夾', en: 'Pick folder' },
+  camSaveFolderChange:   { zh: '更換', en: 'Change' },
+  camSaveFolderUnsupported: { zh: '此瀏覽器不支援指定資料夾（僅支援桌面版 Chrome / Edge）', en: 'This browser does not support folder picking (desktop Chrome / Edge only)' },
+  camCardTitle:          { zh: '攝影機錄影（選用）', en: 'Camera Recording (optional)' },
+  camEnable:             { zh: '同步錄製攝影機', en: 'Record cameras alongside EEG' },
+  camAdvanced:           { zh: '進階設定', en: 'Advanced' },
+  camReady:              { zh: '攝影機就緒', en: 'cameras ready' },
+  camFolderRequiredHint: { zh: '勾選後將要求選擇資料夾', en: 'Will prompt for a folder when enabled' },
+  camFolderErrorTitle:   { zh: '無法存取此資料夾', en: 'Folder Not Accessible' },
+  camFolderErrorBody:    {
+    zh: '瀏覽器拒絕存取此資料夾（可能含系統檔或受系統保護）。請改選一般使用者資料夾，例如桌面下新建的「sigmacog_data」或「My Documents」內的子資料夾。',
+    en: "The browser refused access to this folder (it may contain system files or be system-protected). Please pick a regular user folder — e.g. a freshly created 'sigmacog_data' on Desktop, or a subfolder under Documents."
+  },
+  camFolderErrorClose:   { zh: '了解', en: 'OK' },
+  camFolderErrorRetry:   { zh: '重新選擇', en: 'Pick again' },
 };
 
 export const LangContext = createContext<Lang>('zh');

@@ -4,7 +4,10 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.4.4'
+const APP_VERSION = '1.4.5'
+// v1.4.5 — ui: move α (Save Folder) and β (Camera) cards from col 2 to the
+//   top of col 3, above the 錄製·標記 title. Reduces col-2 vertical pressure
+//   and groups recording-adjacent controls (folder + cam + start/stop) together.
 // v1.4.4 — fix: norm_engine dynamic import 404 (text/html MIME). The obfuscator
 //   stringArray was turning `import('../pkg/norm_engine/norm_engine')` into
 //   `import(t(350))`, which prevents Vite from rewriting the path to a chunk

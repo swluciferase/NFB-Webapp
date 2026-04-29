@@ -538,104 +538,6 @@ export const RecordView: FC<RecordViewProps> = ({
         )}
       </div>
 
-      {/* Save Folder + Camera cards (port from sgimacog v1.5.1) */}
-      {cam && cam.fsAvailable && (
-        <div style={cardStyle}>
-          {stitle('α', T(lang, 'camSaveFolderTitle'))}
-          <div className="cam-rig-body" style={{ marginBottom: 0 }}>
-            <button
-              type="button"
-              className={`cam-pill${cam.rootFolderName ? ' has-folder' : ''}`}
-              onClick={async () => {
-                try {
-                  await cam.pickFolder();
-                } catch (err) {
-                  const ex = err as DOMException;
-                  if (ex?.name === 'AbortError') return;
-                  setFolderErrorMsg(ex?.message ?? String(err));
-                  setShowFolderError(true);
-                }
-              }}
-              disabled={isRecording}
-            >
-              <span className="cam-pill-glyph">∂</span>
-              {cam.rootFolderName ?? T(lang, 'camSaveFolderPick')}
-            </button>
-            <span style={{
-              fontSize: '.58rem',
-              letterSpacing: '.04em',
-              color: cam.rootFolderName ? 'var(--green)' : 'var(--muted)',
-              fontFamily: "'IBM Plex Mono', monospace",
-              flex: 1,
-            }}>
-              {cam.rootFolderName ? T(lang, 'camSaveFolderHintSet') : T(lang, 'camSaveFolderHintNone')}
-            </span>
-          </div>
-        </div>
-      )}
-      {cam && !cam.fsAvailable && (
-        <BrowserCompatBanner lang={lang} />
-      )}
-      {cam && cam.fsAvailable && (
-        <div style={cardStyle}>
-          {stitle('β', T(lang, 'camCardTitle'))}
-          <div className="cam-rig-body" style={{ marginBottom: 0 }}>
-            <label className={`cam-check${isRecording ? ' disabled' : ''}`}>
-              <input
-                type="checkbox"
-                checked={cam.enabled}
-                disabled={isRecording}
-                onChange={async (e) => {
-                  const wantOn = e.target.checked;
-                  if (!wantOn) { cam.setEnabled(false); return; }
-                  if (!cam.hasFolder) {
-                    try {
-                      await cam.pickFolder();
-                    } catch (err) {
-                      const ex = err as DOMException;
-                      if (ex?.name === 'AbortError') return;
-                      setFolderErrorMsg(ex?.message ?? String(err));
-                      setShowFolderError(true);
-                      return;
-                    }
-                  }
-                  cam.setEnabled(true);
-                }}
-              />
-              <span className="cam-check-box" />
-              <span>{T(lang, 'camEnable')}</span>
-            </label>
-            <button
-              type="button"
-              className="cam-pill"
-              onClick={() => setShowCamSettings(true)}
-              disabled={!cam.enabled}
-            >
-              <span className="cam-pill-glyph">⚙</span>
-              {T(lang, 'camAdvanced')}
-            </button>
-            {cam.enabled && cam.rootFolderName && (
-              <span className="cam-ready">
-                <span className="cam-ready-count">
-                  {Object.values(cam.slots).filter((s) => s.deviceId).length}
-                </span>
-                <span>/4 · {T(lang, 'camReady')}</span>
-              </span>
-            )}
-            {!cam.hasFolder && !cam.enabled && (
-              <span style={{
-                fontSize: '.56rem',
-                color: 'var(--muted)',
-                fontFamily: "'IBM Plex Mono', monospace",
-                letterSpacing: '.04em',
-              }}>
-                {T(lang, 'camFolderRequiredHint')}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Filter · VisioMynd card */}
       <div style={cardStyle}>
         {stitle('⌗', lang === 'zh' ? '濾波 · VisioMynd' : 'Filter · VisioMynd')}
@@ -808,6 +710,104 @@ export const RecordView: FC<RecordViewProps> = ({
   // ════════════════════════════════════════
   const controlsSection = (
     <>
+      {/* Save Folder + Camera cards (moved from settings col, sit above 錄製·標記) */}
+      {cam && cam.fsAvailable && (
+        <div style={cardStyle}>
+          {stitle('α', T(lang, 'camSaveFolderTitle'))}
+          <div className="cam-rig-body" style={{ marginBottom: 0 }}>
+            <button
+              type="button"
+              className={`cam-pill${cam.rootFolderName ? ' has-folder' : ''}`}
+              onClick={async () => {
+                try {
+                  await cam.pickFolder();
+                } catch (err) {
+                  const ex = err as DOMException;
+                  if (ex?.name === 'AbortError') return;
+                  setFolderErrorMsg(ex?.message ?? String(err));
+                  setShowFolderError(true);
+                }
+              }}
+              disabled={isRecording}
+            >
+              <span className="cam-pill-glyph">∂</span>
+              {cam.rootFolderName ?? T(lang, 'camSaveFolderPick')}
+            </button>
+            <span style={{
+              fontSize: '.58rem',
+              letterSpacing: '.04em',
+              color: cam.rootFolderName ? 'var(--green)' : 'var(--muted)',
+              fontFamily: "'IBM Plex Mono', monospace",
+              flex: 1,
+            }}>
+              {cam.rootFolderName ? T(lang, 'camSaveFolderHintSet') : T(lang, 'camSaveFolderHintNone')}
+            </span>
+          </div>
+        </div>
+      )}
+      {cam && !cam.fsAvailable && (
+        <BrowserCompatBanner lang={lang} />
+      )}
+      {cam && cam.fsAvailable && (
+        <div style={cardStyle}>
+          {stitle('β', T(lang, 'camCardTitle'))}
+          <div className="cam-rig-body" style={{ marginBottom: 0 }}>
+            <label className={`cam-check${isRecording ? ' disabled' : ''}`}>
+              <input
+                type="checkbox"
+                checked={cam.enabled}
+                disabled={isRecording}
+                onChange={async (e) => {
+                  const wantOn = e.target.checked;
+                  if (!wantOn) { cam.setEnabled(false); return; }
+                  if (!cam.hasFolder) {
+                    try {
+                      await cam.pickFolder();
+                    } catch (err) {
+                      const ex = err as DOMException;
+                      if (ex?.name === 'AbortError') return;
+                      setFolderErrorMsg(ex?.message ?? String(err));
+                      setShowFolderError(true);
+                      return;
+                    }
+                  }
+                  cam.setEnabled(true);
+                }}
+              />
+              <span className="cam-check-box" />
+              <span>{T(lang, 'camEnable')}</span>
+            </label>
+            <button
+              type="button"
+              className="cam-pill"
+              onClick={() => setShowCamSettings(true)}
+              disabled={!cam.enabled}
+            >
+              <span className="cam-pill-glyph">⚙</span>
+              {T(lang, 'camAdvanced')}
+            </button>
+            {cam.enabled && cam.rootFolderName && (
+              <span className="cam-ready">
+                <span className="cam-ready-count">
+                  {Object.values(cam.slots).filter((s) => s.deviceId).length}
+                </span>
+                <span>/4 · {T(lang, 'camReady')}</span>
+              </span>
+            )}
+            {!cam.hasFolder && !cam.enabled && (
+              <span style={{
+                fontSize: '.56rem',
+                color: 'var(--muted)',
+                fontFamily: "'IBM Plex Mono', monospace",
+                letterSpacing: '.04em',
+              }}>
+                {T(lang, 'camFolderRequiredHint')}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {stitle('◉', lang === 'zh' ? '錄製 · 標記' : 'Record · Markers')}
 
       {/* Recording controls card */}

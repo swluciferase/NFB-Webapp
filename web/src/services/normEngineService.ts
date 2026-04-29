@@ -3,7 +3,7 @@
  * Manages initialization and access to the WASM-based NormEngine for Z-score computation.
  */
 
-import type { NormEngine } from '../pkg/norm_engine/norm_engine';
+import type { NormEngine } from '../pkg/norm_engine/norm_engine.js';
 
 class NormEngineService {
   private engine: NormEngine | null = null;
@@ -47,7 +47,7 @@ class NormEngineService {
 
       const buf = await res.arrayBuffer();
       // Dynamic import required for WASM modules with vite-plugin-wasm
-      const { NormEngine: NE } = await import('../pkg/norm_engine/norm_engine');
+      const { NormEngine: NE } = await import('../pkg/norm_engine/norm_engine.js');
       this.engine = new NE(new Uint8Array(buf));
       this.currentDbKey = dbKey;
     } catch (err) {

@@ -4,7 +4,14 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.4.3'
+const APP_VERSION = '1.4.4'
+// v1.4.4 — fix: norm_engine dynamic import 404 (text/html MIME). The obfuscator
+//   stringArray was turning `import('../pkg/norm_engine/norm_engine')` into
+//   `import(t(350))`, which prevents Vite from rewriting the path to a chunk
+//   URL → at runtime the literal `pkg/norm_engine/norm_engine` is requested,
+//   matched by the SPA fallback, and served as HTML. Fix: exclude
+//   normEngineService.ts from the obfuscator (mirroring wasm.ts) and append
+//   `.js` to the dynamic import path so Vite resolves it deterministically.
 // v1.4.3 — feat: FormulaCard (EEG #5) gains per-card Power/Z-Score selector.
 //   Z-Score is enabled only when the formula matches the whitelist
 //   (A/B, log(A/B), (A-B)/(A+B)) and CHBMP norm is loaded. Math:
@@ -42,6 +49,7 @@ export default defineConfig({
         /node_modules/,
         /src\/pkg\/.*\.js/,
         /src\/services\/wasm\.ts/,
+        /src\/services\/normEngineService\.ts/,
         /src\/components\/layout\/Header\.tsx/,
         /src\/game\/subject\//,
         /src\/game\/games\//,

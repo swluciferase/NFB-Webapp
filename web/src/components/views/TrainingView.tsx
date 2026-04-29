@@ -13,6 +13,12 @@ import {
 import { nfbLiveStore } from '../../services/nfbLiveStore';
 import { normEngineService } from '../../services/normEngineService';
 import { computeQeegZScores, getChannelBandZ, type ZScoreResult } from '../../services/qeegZScoreService';
+import {
+  parseFormulaForZ,
+  ensureMuSigmaTable,
+  computeFormulaZ,
+  type FormulaPattern,
+} from '../../services/formulaZScoreService';
 
 // ── Z-Score DB options ──────────────────────────────────────────────────────
 const ZSCORE_DBS = [
@@ -483,16 +489,32 @@ const FormulaCard: FC<{
   indicator: EegIndicator;
   isLive: boolean;
   liveBandPower: number[][] | null;
+  metricModeReady: boolean;
+  parsedPattern: FormulaPattern | null;
+  formulaZ: number | null;
   onToggle: (id: number) => void;
   onFormulaChange: (id: number, formula: string) => void;
   onThresholdChange: (id: number, delta: number) => void;
   onAutoThresholdToggle: (id: number) => void;
   onDirectionChange: (id: number, d: Direction) => void;
-}> = ({ indicator, isLive, liveBandPower, onToggle, onFormulaChange, onThresholdChange, onAutoThresholdToggle, onDirectionChange }) => {
+  onMetricModeChange: (id: number, m: MetricMode) => void;
+}> = ({ indicator, isLive, liveBandPower, metricModeReady, parsedPattern, formulaZ, onToggle, onFormulaChange, onThresholdChange, onAutoThresholdToggle, onDirectionChange, onMetricModeChange }) => {
   const lang = useLang();
-  const computedValue = isLive ? (evalFormula(indicator.formula, liveBandPower) ?? 0) : 0;
-  const aboveThreshold = computedValue >= indicator.threshold;
-  const met = indicator.direction === 'up' ? aboveThreshold : !aboveThreshold;
+  const isZ = indicator.metricMode === 'zscore' && parsedPattern !== null;
+  const rawValue = isLive ? (evalFormula(indicator.formula, liveBandPower) ?? 0) : 0;
+  const displayValue = isZ ? (formulaZ ?? null) : rawValue;
+  const aboveThreshold = displayValue !== null && displayValue >= indicator.threshold;
+  const met = indicator.direction === 'up' ? aboveThreshold : (displayValue !== null && !aboveThreshold);
+  const zEnabled = parsedPattern !== null && metricModeReady;
+  const selectStyle: React.CSSProperties = {
+    background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 5,
+    color: 'var(--text-primary)', fontSize: 12, padding: '3px 6px', cursor: 'pointer',
+  };
+  const zModeTip = !metricModeReady
+    ? '請先在右欄填寫受測者年齡才能啟用 Z-Score'
+    : !parsedPattern
+      ? '公式不在 Z-Score 白名單（A/B、log(A/B)、(A−B)/(A+B)）'
+      : 'Z 分數採 CHBMP 對數常模 (5–87 歲)';
   return (
     <div style={{ background: 'var(--bg-secondary)', border: '1px solid rgba(88,166,255,0.25)', borderRadius: 10, padding: '10px 12px', marginBottom: 6, opacity: indicator.enabled ? 1 : 0.55 }}>
       {/* Header */}
@@ -508,6 +530,23 @@ const FormulaCard: FC<{
         </button>
       </div>
 
+      {/* Metric mode (single row above formula input) */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <select
+          value={indicator.metricMode}
+          onChange={e => onMetricModeChange(indicator.id, e.target.value as MetricMode)}
+          title={zModeTip}
+          style={{
+            ...selectStyle,
+            flex: 1,
+            color: indicator.metricMode === 'zscore' ? '#e8a020' : 'var(--text-primary)',
+            borderColor: indicator.metricMode === 'zscore' ? 'rgba(232,160,32,0.55)' : 'var(--border)',
+          }}>
+          <option value="power">功率 Power</option>
+          <option value="zscore" disabled={!zEnabled}>Z 分數 Z-Score</option>
+        </select>
+      </div>
+
       {/* Formula input */}
       <div style={{ marginBottom: 8 }}>
         <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -520,11 +559,17 @@ const FormulaCard: FC<{
           placeholder={T(lang, 'trainFormulaPlaceholder')}
           style={{
             width: '100%', boxSizing: 'border-box',
-            background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+            background: 'var(--bg-tertiary)',
+            border: `1px solid ${indicator.metricMode === 'zscore' && !parsedPattern ? 'rgba(248,129,74,0.5)' : 'var(--border)'}`,
             borderRadius: 5, color: 'var(--text-primary)',
             fontSize: 12, padding: '5px 8px', fontFamily: 'ui-monospace,monospace',
           }}
         />
+        {indicator.metricMode === 'zscore' && !parsedPattern && (
+          <div style={{ fontSize: 10, color: 'rgba(248,129,74,0.85)', marginTop: 3 }}>
+            Z 分數白名單：A/B、log(A/B)、(A−B)/(A+B)（A、B 須為單一 Channel_Band 詞元）
+          </div>
+        )}
         <div style={{ fontSize: 10, color: 'rgba(93,109,134,0.6)', marginTop: 3 }}>
           {T(lang, 'trainFormulaHint')}
         </div>
@@ -541,8 +586,9 @@ const FormulaCard: FC<{
 
       {/* Value */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? '#8ecfff' : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
-          {isLive ? computedValue.toFixed(3) : '—'}
+        <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 14, color: isLive ? (isZ ? '#e8a020' : '#8ecfff') : 'rgba(200,215,235,0.45)', fontWeight: 600 }}>
+          {isLive && displayValue !== null ? displayValue.toFixed(3) : '—'}
+          {isZ && <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 4 }}>Z</span>}
         </span>
         <Badge label={met ? 'ON' : 'OFF'} color={met ? '#3fb950' : '#f85149'} bg={met ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'} />
       </div>
@@ -562,9 +608,9 @@ const FormulaCard: FC<{
         <input
           type="number"
           value={+indicator.threshold.toFixed(3)}
-          onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) onThresholdChange(indicator.id, v - indicator.threshold); }}
+          onChange={e => { const v = parseFloat(e.target.value); if (isFinite(v)) onThresholdChange(indicator.id, v - indicator.threshold); }}
           disabled={indicator.autoThreshold}
-          step={0.001} min={0.001}
+          step={isZ ? 0.1 : 0.001}
           style={{ width: 80, background: 'var(--bg-tertiary)', border: `1px solid ${indicator.autoThreshold ? 'rgba(88,166,255,0.2)' : 'rgba(248,129,74,0.4)'}`, borderRadius: 4, color: indicator.autoThreshold ? 'rgba(88,166,255,0.4)' : 'rgba(248,129,74,0.9)', fontSize: 11, padding: '2px 5px', fontFamily: 'ui-monospace,monospace', textAlign: 'right', opacity: indicator.autoThreshold ? 0.5 : 1 }}
         />
         <button
@@ -1447,14 +1493,21 @@ export const TrainingView: FC<TrainingViewProps> = ({
           ? (zScoreBandPowerRef.current ?? evalBandPowerRef.current)
           : evalBandPowerRef.current;
         if (ind.formula) {
-          // Formula evaluation: id=5 FormulaCard + preset formulas for #1–4 (raw power only)
-          const rawVal = evalFormula(ind.formula, evalBandPowerRef.current) ?? ind.value;
-          // Preset formulas: apply 5-sample moving average (window=5, overlap=4)
-          if (ind.presetKey) {
-            const maWin = [...ind.history.slice(-4), rawVal];
-            newVal = maWin.reduce((a, b) => a + b, 0) / maWin.length;
+          // Formula evaluation:
+          //   • id=5 FormulaCard: respects metricMode (zscore uses precomputed formula5Z)
+          //   • preset formulas for #1–4: always raw power
+          if (ind.id === 5 && ind.metricMode === 'zscore') {
+            const z = formula5ZRef.current;
+            newVal = z !== null ? z : ind.value;
           } else {
-            newVal = rawVal;
+            const rawVal = evalFormula(ind.formula, evalBandPowerRef.current) ?? ind.value;
+            // Preset formulas: apply 5-sample moving average (window=5, overlap=4)
+            if (ind.presetKey) {
+              const maWin = [...ind.history.slice(-4), rawVal];
+              newVal = maWin.reduce((a, b) => a + b, 0) / maWin.length;
+            } else {
+              newVal = rawVal;
+            }
           }
         } else {
           const bp = indBP;
@@ -1815,6 +1868,33 @@ export const TrainingView: FC<TrainingViewProps> = ({
   };
 
   const metricModeReady = subjectAge > 0 && normReady;
+
+  // ── FormulaCard (id=5) Z-Score: parse formula whitelist + compute live Z ──
+  const formulaIndicator = indicators.find(i => i.id === 5);
+  const formula5Pattern: FormulaPattern | null = useMemo(
+    () => formulaIndicator ? parseFormulaForZ(formulaIndicator.formula) : null,
+    [formulaIndicator?.formula],
+  );
+  const formula5Z: number | null = useMemo(() => {
+    if (!formulaIndicator || formulaIndicator.metricMode !== 'zscore') return null;
+    if (!formula5Pattern || !metricModeReady || !liveBandPower) return null;
+    const bandsDef = NFB_BANDS.map(b => ({ lo: b.startHz, hi: b.endHz }));
+    const table = ensureMuSigmaTable(subjectAge, zScoreDb, bandsDef);
+    if (!table) return null;
+    return computeFormulaZ(formula5Pattern, {
+      table,
+      bandIndexByName: (name) => NFB_BANDS.findIndex(b => b.name === name),
+      rawPowerByTerm: (t) => {
+        const ci = (CHANNEL_LABELS as readonly string[]).indexOf(t.channel);
+        const bi = NFB_BANDS.findIndex(b => b.name === t.band);
+        if (ci < 0 || bi < 0) return 0;
+        return liveBandPower[ci]?.[bi] ?? 0;
+      },
+    });
+  }, [formulaIndicator?.metricMode, formula5Pattern, metricModeReady, liveBandPower, subjectAge, zScoreDb]);
+  const formula5ZRef = useRef(formula5Z);
+  useEffect(() => { formula5ZRef.current = formula5Z; }, [formula5Z]);
+
   const eegCardHandlers = {
     onToggle: (id: number) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, enabled: !i.enabled } : i)),
     onChannelChange: (id: number, ch: Channel) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, channel: ch, presetKey: '', formula: '' } : i)),
@@ -1846,11 +1926,15 @@ export const TrainingView: FC<TrainingViewProps> = ({
             indicator={ind}
             isLive={isLive}
             liveBandPower={evalBandPower}
+            metricModeReady={metricModeReady}
+            parsedPattern={formula5Pattern}
+            formulaZ={formula5Z}
             onToggle={eegCardHandlers.onToggle}
             onFormulaChange={(id, formula) => setIndicators(prev => prev.map(i => i.id === id ? { ...i, formula } : i))}
             onThresholdChange={eegCardHandlers.onThresholdChange}
             onAutoThresholdToggle={eegCardHandlers.onAutoThresholdToggle}
             onDirectionChange={eegCardHandlers.onDirectionChange}
+            onMetricModeChange={eegCardHandlers.onMetricModeChange}
           />
         ) : (
           <EegCard key={ind.id} indicator={ind} isLive={isLive}

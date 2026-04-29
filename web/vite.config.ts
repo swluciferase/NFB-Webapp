@@ -4,7 +4,15 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.4.2'
+const APP_VERSION = '1.4.3'
+// v1.4.3 — feat: FormulaCard (EEG #5) gains per-card Power/Z-Score selector.
+//   Z-Score is enabled only when the formula matches the whitelist
+//   (A/B, log(A/B), (A-B)/(A+B)) and CHBMP norm is loaded. Math:
+//   • A/B & log(A/B): Z = (log10A − log10B − Δμ_log) / √(σ²_logA + σ²_logB)
+//   • (A−B)/(A+B): delta-method on log-normal back-transformed raw stats.
+//   (μ_log, σ_log) are extracted from the WASM engine via a probe trick
+//   (zscore_qeeg with zeros + ones in log-space) — no WASM rebuild needed.
+//   Saturated (channel × band) entries (|Z|≈10) fall back to null.
 // v1.4.2 — ui: collapse EegCard metric / channel / band into a single row
 //   (was 2 rows). Z-Score selector flexed slightly wider to fit "Z 分數 Z-Score".
 // v1.4.1 — fix: per-EegCard Power/Z-Score dropdown (4 independent selectors).

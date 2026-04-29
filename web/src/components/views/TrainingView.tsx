@@ -364,24 +364,22 @@ const EegCard: FC<{
         )}
       </div>
 
-      {/* Metric mode selector — independent per indicator. Z-Score gates on subjectAge + normReady. */}
+      {/* Metric mode + Channel + Band — single row to save vertical space.
+          Z-Score gates on subjectAge + normReady. */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, opacity: activePreset ? 0.35 : 1, pointerEvents: activePreset ? 'none' : 'auto' }}>
         <select
           value={indicator.metricMode}
           onChange={e => onMetricModeChange(indicator.id, e.target.value as MetricMode)}
-          title={!metricModeReady ? '請先在右欄填寫受測者年齡才能啟用 Z-Score' : ''}
+          title={!metricModeReady ? '請先在右欄填寫受測者年齡才能啟用 Z-Score' : 'Z 分數需 CHBMP 常模 (5–87 歲)'}
           style={{
             ...selectStyle,
+            flex: 1.4,
             color: indicator.metricMode === 'zscore' ? '#e8a020' : 'var(--text-primary)',
             borderColor: indicator.metricMode === 'zscore' ? 'rgba(232,160,32,0.55)' : 'var(--border)',
           }}>
           <option value="power">功率 Power</option>
-          <option value="zscore" disabled={!metricModeReady}>Z 分數 Z-Score · CHBMP 5–87</option>
+          <option value="zscore" disabled={!metricModeReady}>Z 分數 Z-Score</option>
         </select>
-      </div>
-
-      {/* Channel + Band selectors — always visible; dimmed when a preset overrides */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8, opacity: activePreset ? 0.35 : 1, pointerEvents: activePreset ? 'none' : 'auto' }}>
         <select value={indicator.channel} onChange={e => onChannelChange(indicator.id, e.target.value as Channel)} style={selectStyle}>
           {CHANNELS.map(ch => <option key={ch} value={ch}>{ch}</option>)}
         </select>

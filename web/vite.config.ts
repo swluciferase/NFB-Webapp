@@ -4,7 +4,9 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.4.1'
+const APP_VERSION = '1.4.2'
+// v1.4.2 — ui: collapse EegCard metric / channel / band into a single row
+//   (was 2 rows). Z-Score selector flexed slightly wider to fit "Z 分數 Z-Score".
 // v1.4.1 — fix: per-EegCard Power/Z-Score dropdown (4 independent selectors).
 //   • Each EEG#1-4 card now has its own <select> placed directly above the
 //     channel+band row; mode is per-indicator (no global toggle), so users can

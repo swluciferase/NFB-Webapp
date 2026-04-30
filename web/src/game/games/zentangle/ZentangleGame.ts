@@ -156,11 +156,19 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
   const activePointers = new Map<number, { x: number; y: number }>();
 
   const canvas = app.canvas as HTMLCanvasElement;
-  // Keep cursor visible and give touch devices a non-scrolling surface.
+  // Pen-shaped cursor (SVG, 24×24, hotspot at the tip 2,22). Browsers fall
+  // back to crosshair if the data-URI fails to load.
+  const PEN_CURSOR =
+    "url(\"data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M2 22 L5 21 L19 7 L17 5 L3 19 Z' fill='%232a1f14' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Ccircle cx='2.5' cy='21.5' r='0.8' fill='white'/%3E%3C/svg%3E\") 2 22, crosshair";
+  // The subject window sets `body { cursor: none }` for immersion in plane /
+  // baseball / karesansui. Zentangle needs the cursor visible so the patient
+  // can see where their pen will draw — override on both body and canvas.
   const prevTouchAction = canvas.style.touchAction;
   const prevCursor = canvas.style.cursor;
+  const prevBodyCursor = document.body.style.cursor;
   canvas.style.touchAction = 'none';
-  canvas.style.cursor = 'crosshair';
+  canvas.style.cursor = PEN_CURSOR;
+  document.body.style.cursor = PEN_CURSOR;
 
   // ── End overlay ─────────────────────────────────────────────────────────
   const endOverlay = new Container();
@@ -504,6 +512,7 @@ export function createZentangleGame(args: ZentangleGameArgs): GameInstance {
       canvas.removeEventListener('pointerleave', onPointerUp);
       canvas.style.touchAction = prevTouchAction;
       canvas.style.cursor = prevCursor;
+      document.body.style.cursor = prevBodyCursor;
       stage.removeChild(root);
       root.destroy({ children: true });
       finishCb = null;

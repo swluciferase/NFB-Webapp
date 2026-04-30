@@ -4,7 +4,17 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.4.6'
+const APP_VERSION = '1.4.7'
+// v1.4.7 — fix: HistCanvas (EEG #1–5 history bars) collapsed to an empty
+//   strip when the history was negative (Z-Score mode). The old `max =
+//   max(history, threshold*1.1, 1)` clamped the y-scale to ≥1 and used
+//   `fillRect(x, h - barH, w, barH)`, so a value of −4.16 drew a rect from
+//   y=200 down by 158 px on a 42 px canvas → entirely off-screen. New code
+//   computes a signed range `[min(history,threshold,0), max(history,threshold,0)]`
+//   and draws each bar from a floating zero baseline (+ a faint zero line when
+//   both signs are present). Threshold drag now uses the same range so dragging
+//   below zero works for Z-Score; the `Math.max(0.5, …)` floor inside the
+//   canvas handler is removed (parent decides clamp). Mirrors Poseidon v1.10.11.
 // v1.4.6 — fix: TrainingView auto-threshold (EEG #1–5) was using RMS of the
 //   recent history window for both Power and Z-Score modes. RMS is sign-blind:
 //   a Z=−1 sample contributes the same as Z=+1, so when the user is consistently

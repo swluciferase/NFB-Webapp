@@ -216,25 +216,44 @@ const HistCanvas: FC<{
     const w = canvas.width; const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
     if (history.length < 2) return;
-    const max = Math.max(...history, threshold * 1.1, 1);
+    // Signed range so negative Z-scores draw inside the canvas. Always include 0
+    // so the baseline anchors the bars; positive-only history collapses to the
+    // old "bars grow up from bottom" behaviour, negative-only flips to "grow
+    // down from top", mixed centres the zero line.
+    const minV = Math.min(...history, threshold, 0);
+    const maxV = Math.max(...history, threshold, 0);
+    const range = (maxV - minV) || 1;
+    const padTop = 2;
+    const drawH = h - 2 * padTop;
+    const yOf = (v: number) => padTop + ((maxV - v) / range) * drawH;
+    const zeroY = yOf(0);
     const barW = Math.floor(w / history.length);
     history.forEach((v, i) => {
-      const barH = Math.round((v / max) * (h - 4));
+      const yv = yOf(v);
+      const top = Math.min(yv, zeroY);
+      const barH = Math.max(1, Math.abs(yv - zeroY));
       const met = direction === 'up' ? v >= threshold : v < threshold;
       ctx.fillStyle = direction === 'up'
         ? (met ? 'rgba(63,185,80,0.75)' : 'rgba(88,166,255,0.55)')
         : (met ? 'rgba(248,81,73,0.75)' : 'rgba(88,166,255,0.55)');
-      ctx.fillRect(i * barW, h - barH, Math.max(1, barW - 1), barH);
+      ctx.fillRect(i * barW, top, Math.max(1, barW - 1), barH);
     });
-    const ty = Math.round(h - (threshold / max) * (h - 4));
+    if (minV < 0 && maxV > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
+      const zy = Math.round(zeroY) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, zy); ctx.lineTo(w, zy); ctx.stroke();
+    }
+    const ty = Math.round(yOf(threshold));
     ctx.strokeStyle = 'rgba(248,129,74,0.85)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(w, ty); ctx.stroke(); ctx.setLineDash([]);
   }, [history, threshold, canvasWidth, direction]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!onThresholdChange) return;
-    const max = Math.max(...history, threshold * 1.1, 1);
-    dragRef.current = { startY: e.clientY, startThresh: threshold, max };
+    const minV = Math.min(...history, threshold, 0);
+    const maxV = Math.max(...history, threshold, 0);
+    const range = (maxV - minV) || 1;
+    dragRef.current = { startY: e.clientY, startThresh: threshold, max: range };
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
   }, [history, threshold, onThresholdChange]);
 
@@ -244,8 +263,7 @@ const HistCanvas: FC<{
     const dy = e.clientY - startY;
     // drag up = decrease Y = increase threshold
     const delta = -dy * max / (height - 4);
-    const newThresh = Math.max(0.5, startThresh + delta);
-    onThresholdChange(newThresh - threshold);
+    onThresholdChange((startThresh + delta) - threshold);
   }, [onThresholdChange, threshold, height]);
 
   const handlePointerUp = useCallback(() => {

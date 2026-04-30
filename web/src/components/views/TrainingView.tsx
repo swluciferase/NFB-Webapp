@@ -1211,6 +1211,22 @@ function computeRMS(values: number[]): number {
   return Math.sqrt(values.reduce((acc, v) => acc + v * v, 0) / values.length);
 }
 
+// Auto-threshold baseline.
+// • Power values are always ≥ 0 → RMS gives a stable "current magnitude".
+// • Z-scores can be negative → RMS is sign-blind (treats Z=−1 like Z=+1) and
+//   pushes the threshold above zero even when the user is consistently below
+//   norm, breaking both up- and down-direction logic. Use the arithmetic
+//   mean for Z-scores so the threshold tracks the actual recent level
+//   (preserving sign).
+function computeAutoThreshold(values: number[], metricMode: MetricMode): number {
+  if (values.length === 0) return 0;
+  if (metricMode === 'zscore') {
+    let s = 0; for (const v of values) s += v;
+    return s / values.length;
+  }
+  return computeRMS(values);
+}
+
 function makeDefaultIndicators(): EegIndicator[] {
   return Array.from({ length: 5 }, (_, i) => ({
     id: i + 1,
@@ -1517,7 +1533,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
           if (live === null) {
             const newHistory = [...ind.history, ind.value].slice(-HISTORY_LEN);
             const newThreshold = ind.autoThreshold
-              ? (computeRMS(newHistory.slice(-W_VALUES[persistenceLevelRef.current - 1])) || ind.threshold)
+              ? (computeAutoThreshold(newHistory.slice(-W_VALUES[persistenceLevelRef.current - 1]), ind.metricMode) || ind.threshold)
               : ind.threshold;
             return { ...ind, history: newHistory, threshold: newThreshold };
           }
@@ -1525,7 +1541,7 @@ export const TrainingView: FC<TrainingViewProps> = ({
         }
         const newHistory = [...ind.history, newVal].slice(-HISTORY_LEN);
         const newThreshold = ind.autoThreshold
-          ? (computeRMS(newHistory.slice(-W_VALUES[persistenceLevelRef.current - 1])) || ind.threshold)
+          ? (computeAutoThreshold(newHistory.slice(-W_VALUES[persistenceLevelRef.current - 1]), ind.metricMode) || ind.threshold)
           : ind.threshold;
         return { ...ind, value: newVal, history: newHistory, threshold: newThreshold };
       }));

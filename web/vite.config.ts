@@ -4,7 +4,15 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.4.5'
+const APP_VERSION = '1.4.6'
+// v1.4.6 — fix: TrainingView auto-threshold (EEG #1–5) was using RMS of the
+//   recent history window for both Power and Z-Score modes. RMS is sign-blind:
+//   a Z=−1 sample contributes the same as Z=+1, so when the user is consistently
+//   below the normative mean, the auto-threshold drifts above zero and breaks
+//   both up- and down-direction detection. New `computeAutoThreshold(values,
+//   metricMode)` helper now returns the arithmetic mean (sign-preserving) when
+//   `metricMode === 'zscore'` and falls back to RMS for Power mode (which is
+//   always ≥ 0). Mirrors Poseidon v1.10.10.
 // v1.4.5 — ui: move α (Save Folder) and β (Camera) cards from col 2 to the
 //   top of col 3, above the 錄製·標記 title. Reduces col-2 vertical pressure
 //   and groups recording-adjacent controls (folder + cam + start/stop) together.

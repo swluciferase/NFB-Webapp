@@ -164,8 +164,8 @@ function App() {
   });
 
   // ── Event markers (shared between signal + record views) ──
-  const [eventMarkers, setEventMarkers] = useState<{ id: string; time: number; label: string }[]>([]);
-  const pendingMarkerRef = useRef<{ id: string; time: number; label: string } | null>(null);
+  const [eventMarkers, setEventMarkers] = useState<{ id: string; time: number; label: string; kind?: 'software' | 'hardware' }[]>([]);
+  const pendingMarkerRef = useRef<{ id: string; label: string; time: number; wallclock: number } | null>(null);
 
   // ── Camera + folder session (port from sgimacog v1.5.1) ──
   const cam = useCameraSession();
@@ -287,17 +287,43 @@ function App() {
 
   // Recording: collect raw samples each frame
   useEffect(() => {
-    if (!isRecording) return;
     for (const pkt of latestPackets) {
       if (!pkt.eegChannels || pkt.eegChannels.length < 8) continue;
+
+      // Hardware event (filter zero-byte idle)
+      let hardwareEvent: number | undefined;
+      let hardwareEventWallclock: number | undefined;
+      if (pkt.event != null && pkt.event !== 0) {
+        hardwareEvent = pkt.event;
+        hardwareEventWallclock = Date.now();
+      }
+
+      // Always (regardless of recording): dispatch visual + add to side list
+      if (hardwareEvent !== undefined) {
+        const evTimestamp = hardwareEventWallclock!;
+        window.dispatchEvent(new CustomEvent('hardware-marker-visual', {
+          detail: { value: hardwareEvent, timestamp: evTimestamp, originWallclock: evTimestamp },
+        }));
+        setEventMarkers(prev => [...prev, {
+          id: `hw-${evTimestamp}-${Math.random().toString(36).slice(2, 6)}`,
+          time: evTimestamp,
+          label: `H${hardwareEvent}`,
+          kind: 'hardware' as const,
+        }]);
+      }
+
+      if (!isRecording) continue;
+
       recordTimestampRef.current += 1 / SAMPLE_RATE_HZ;
 
-      // Check for pending event marker (set during this recording session)
-      let eventId: string | undefined;
-      let eventName: string | undefined;
+      // Check for pending software marker (set during this recording session)
+      let softwareMarkerId: string | undefined;
+      let softwareMarkerName: string | undefined;
+      let softwareMarkerWallclock: number | undefined;
       if (pendingMarkerRef.current) {
-        eventId = pendingMarkerRef.current.id;
-        eventName = pendingMarkerRef.current.label;
+        softwareMarkerId = pendingMarkerRef.current.id;
+        softwareMarkerName = pendingMarkerRef.current.label;
+        softwareMarkerWallclock = pendingMarkerRef.current.wallclock;
         pendingMarkerRef.current = null;
       }
 
@@ -305,8 +331,11 @@ function App() {
         timestamp: recordTimestampRef.current,
         serialNumber: pkt.serialNumber,
         channels: new Float32Array(pkt.eegChannels),
-        eventId,
-        eventName,
+        hardwareEvent,
+        hardwareEventWallclock,
+        softwareMarkerId,
+        softwareMarkerName,
+        softwareMarkerWallclock,
       };
       recordSamplesRef.current.push(sample);
     }
@@ -458,11 +487,16 @@ function App() {
     }
   }, [shouldAutoStop, isRecording, handleStopRecording]);
 
-  // ── Event marker handler (from waveform OR record views) ──
-  const handleEventMarker = useCallback((marker: { id: string; time: number; label: string }) => {
+  // ── Event marker handler (from waveform OR record views, or BroadcastChannel) ──
+  const handleEventMarker = useCallback((marker: { id: string; time: number; label: string; kind?: 'software' | 'hardware'; wallclock?: number }) => {
     setEventMarkers(prev => [...prev, marker]);
     if (isRecording) {
-      pendingMarkerRef.current = marker;
+      pendingMarkerRef.current = {
+        id: marker.id,
+        label: marker.label,
+        time: marker.time,
+        wallclock: marker.wallclock ?? marker.time,
+      };
     }
   }, [isRecording]);
 
@@ -471,10 +505,12 @@ function App() {
     if (!isRecording) return;
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'm' || e.key === 'M') {
+        const now = Date.now();
         handleEventMarker({
           id: Math.random().toString(36).substring(2, 9),
-          time: Date.now(),
+          time: now,
           label: `M${eventMarkers.length + 1}`,
+          wallclock: now,
         });
       }
     };

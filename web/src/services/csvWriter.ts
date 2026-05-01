@@ -2,8 +2,24 @@ export interface RecordedSample {
   timestamp: number;        // seconds from recording start
   serialNumber: number | null;
   channels: Float32Array;   // 8 raw µV values (unfiltered)
-  eventId?: string;
-  eventName?: string;
+  /** Hardware event byte (TLV Tag 7), 1..255 when set; undefined when no event in this sample. */
+  hardwareEvent?: number;
+  /**
+   * Unix ms wallclock of the trigger on the source device.
+   * When present, used as `Event Date` in the CSV (Option B source-wallclock alignment).
+   * When absent, falls back to `startTime + timestamp * 1000` (legacy behaviour).
+   */
+  hardwareEventWallclock?: number;
+  /** Software marker numeric ID as string (e.g. "1101"). Comes from BroadcastChannel marker. */
+  softwareMarkerId?: string;
+  /** Software marker label string (e.g. "stim_target"). Comes from BroadcastChannel marker. */
+  softwareMarkerName?: string;
+  /**
+   * Source wallclock (Unix ms) of the software marker — set by the sender (e.g. THEMynd) at
+   * trigger fire time. Used for CSV Event Date (Option B). When absent, falls back to
+   * startTime + timestamp * 1000.
+   */
+  softwareMarkerWallclock?: number;
 }
 
 const pad2 = (n: number) => n.toString().padStart(2, '0');
@@ -50,13 +66,27 @@ export function generateCsv(
       sample.channels[i] !== undefined ? sample.channels[i]!.toFixed(4) : '0.0000',
     ).join(',');
 
-    const eventId = sample.eventId ?? '';
-    const eventDate = sample.eventId ? formatDatetime(new Date(startTime.getTime() + sample.timestamp * 1000)) : '';
-    const eventDuration = '';
-    const softwareMarker = sample.eventId ? '1' : '';
-    const softwareMarkerName = sample.eventName ?? '';
+    const hwEvent = sample.hardwareEvent != null ? String(sample.hardwareEvent) : '';
+    let eventDate = '';
+    if (sample.hardwareEvent != null) {
+      // Hardware takes precedence: use source wallclock (Option B) or fallback.
+      eventDate = formatDatetime(
+        sample.hardwareEventWallclock != null
+          ? new Date(sample.hardwareEventWallclock)
+          : new Date(startTime.getTime() + sample.timestamp * 1000),
+      );
+    } else if (sample.softwareMarkerId != null) {
+      // Software marker: use source wallclock or fallback.
+      eventDate = formatDatetime(
+        sample.softwareMarkerWallclock != null
+          ? new Date(sample.softwareMarkerWallclock)
+          : new Date(startTime.getTime() + sample.timestamp * 1000),
+      );
+    }
+    const swMarker = sample.softwareMarkerId ?? '';
+    const swMarkerName = sample.softwareMarkerName ?? '';
 
-    lines.push(`${ts},${sn},${ch},${eventId},${eventDate},${eventDuration},${softwareMarker},${softwareMarkerName}`);
+    lines.push(`${ts},${sn},${ch},${hwEvent},${eventDate},,${swMarker},${swMarkerName}`);
   }
 
   return lines.join('\r\n') + '\r\n';

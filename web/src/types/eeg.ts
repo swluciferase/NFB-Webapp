@@ -12,6 +12,7 @@ export interface EegPacket {
     accelX: number; accelY: number; accelZ: number;
   } | null;
   machineInfo: string | null; // device ID string from TAG_COMMAND response
+  event: number | null;       // hardware event byte (TLV Tag 7), 0..255 or null
 }
 
 export interface ImpedanceResult {

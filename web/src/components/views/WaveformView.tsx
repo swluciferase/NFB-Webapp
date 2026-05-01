@@ -11,6 +11,7 @@ export interface EventMarker {
   label: string;
   sweepPos: number;     // canvas write position (0 to windowPoints-1) at placement time
   totalSweep: number;  // monotonically increasing sample counter at placement
+  kind?: 'software' | 'hardware';
 }
 
 export interface WaveformViewProps {
@@ -20,8 +21,8 @@ export interface WaveformViewProps {
   onFilterChange: (updated: Partial<FilterParams>, resetStates?: string[]) => void;
   lang: Lang;
   isRecording: boolean;
-  onEventMarker: (marker: { id: string; time: number; label: string }) => void;
-  eventMarkers?: { id: string; time: number; label: string }[];
+  onEventMarker: (marker: { id: string; time: number; label: string; kind?: 'software' | 'hardware'; wallclock?: number }) => void;
+  eventMarkers?: { id: string; time: number; label: string; kind?: 'software' | 'hardware' }[];
 }
 
 const CHANNEL_COLORS: [number, number, number, number][] = [
@@ -328,8 +329,77 @@ export const WaveformView = ({
     const newMarker: EventMarker = { id, time, label, sweepPos: sweepPosRef.current, totalSweep: totalSweepRef.current };
     markersRef.current = [...markersRef.current, newMarker];
     setMarkers(markersRef.current);
-    onEventMarker({ id, time, label });
+    onEventMarker({ id, time, label, wallclock: time });
   }, [onEventMarker]);
+
+  // Visual-only software marker draw (from BroadcastChannel / THEMynd).
+  // Skips onEventMarker — the side-list is already populated by the RecordView handler.
+  const drawMarkerVisualOnly = useCallback((label: string, originWallclock?: number) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    const now = Date.now();
+    const time = originWallclock ?? now;
+    let markerSweepPos = sweepPosRef.current;
+    if (originWallclock != null && originWallclock < now) {
+      const offsetMs = now - originWallclock;
+      const offsetUnits = offsetMs * (SAMPLE_RATE_HZ / 1000);
+      const windowPoints = markerSweepPos > 0 ? totalSweepRef.current || 1 : 1;
+      markerSweepPos = sweepPosRef.current - offsetUnits;
+      while (markerSweepPos < 0) markerSweepPos += windowPoints;
+    }
+    const newMarker: EventMarker = {
+      id, time, label,
+      sweepPos: markerSweepPos,
+      totalSweep: totalSweepRef.current,
+    };
+    markersRef.current = [...markersRef.current, newMarker];
+    setMarkers(markersRef.current);
+  }, []);
+
+  // Hardware-event visual-only marker draw.
+  // Sets kind: 'hardware' so the overlay renders a green solid line.
+  const drawHardwareMarkerVisualOnly = useCallback((label: string, originWallclock?: number) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    const now = Date.now();
+    const time = originWallclock ?? now;
+    let markerSweepPos = sweepPosRef.current;
+    if (originWallclock != null && originWallclock < now) {
+      const offsetMs = now - originWallclock;
+      const offsetUnits = offsetMs * (SAMPLE_RATE_HZ / 1000);
+      const windowPoints = markerSweepPos > 0 ? totalSweepRef.current || 1 : 1;
+      markerSweepPos = sweepPosRef.current - offsetUnits;
+      while (markerSweepPos < 0) markerSweepPos += windowPoints;
+    }
+    const newMarker: EventMarker = {
+      id, time, label,
+      sweepPos: markerSweepPos,
+      totalSweep: totalSweepRef.current,
+      kind: 'hardware',
+    };
+    markersRef.current = [...markersRef.current, newMarker];
+    setMarkers(markersRef.current);
+  }, []);
+
+  // Listen for THEMynd visual-only marker events (fired from RecordView when
+  // a BroadcastChannel/postMessage marker arrives).
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const ce = ev as CustomEvent<{ label?: string; fullLabel?: string; wallclock?: number }>;
+      drawMarkerVisualOnly(ce.detail?.label || `M${markersRef.current.length + 1}`, ce.detail?.wallclock);
+    };
+    window.addEventListener('themynd-marker-visual', handler);
+    return () => window.removeEventListener('themynd-marker-visual', handler);
+  }, [drawMarkerVisualOnly]);
+
+  // Listen for hardware-event marker visual events (dispatched from App.tsx recording loop).
+  // Single-device — no deviceId filter.
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const ce = ev as CustomEvent<{ value: number; timestamp: number; originWallclock?: number }>;
+      drawHardwareMarkerVisualOnly(`H${ce.detail.value}`, ce.detail.originWallclock);
+    };
+    window.addEventListener('hardware-marker-visual', handler);
+    return () => window.removeEventListener('hardware-marker-visual', handler);
+  }, [drawHardwareMarkerVisualOnly]);
 
   // Track whether we've seen the first packet after a connection (for DC init)
   const hasPacketsRef = useRef(false);
@@ -907,31 +977,37 @@ export const WaveformView = ({
           position: 'absolute', top: 0, right: 0, bottom: 0, left: 64,
           pointerEvents: 'none', overflow: 'hidden', zIndex: 5,
         }}>
-          {markers.map(m => (
-            <div
-              key={m.id}
-              ref={el => {
-                if (el) markerDivsRef.current.set(m.id, el);
-                else markerDivsRef.current.delete(m.id);
-              }}
-              style={{
-                position: 'absolute', top: 0, bottom: 0, width: 0,
-                borderLeft: '2px dashed rgba(255,255,0,0.65)',
-                left: '0%',
-                display: 'block',
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: 4, left: 4,
-                color: 'rgba(255,255,0,0.9)', fontSize: 11,
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                background: 'rgba(0,0,0,0.5)', padding: '2px 4px', borderRadius: 3,
-                whiteSpace: 'nowrap',
-              }}>
-                {m.label}
+          {markers.map(m => {
+            const isHw = m.kind === 'hardware';
+            return (
+              <div
+                key={m.id}
+                ref={el => {
+                  if (el) markerDivsRef.current.set(m.id, el);
+                  else markerDivsRef.current.delete(m.id);
+                }}
+                style={{
+                  position: 'absolute', top: 0, bottom: 0, width: 0,
+                  borderLeft: isHw
+                    ? '1.5px solid rgba(67,160,71,0.85)'
+                    : '2px dashed rgba(229,57,53,0.75)',
+                  left: '0%',
+                  display: 'block',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 4, left: 4,
+                  color: isHw ? 'rgba(102,187,106,0.95)' : 'rgba(239,108,99,0.95)',
+                  fontSize: 11,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  background: 'rgba(0,0,0,0.5)', padding: '2px 4px', borderRadius: 3,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {m.label}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Time grid lines (fixed positions, full-height) */}
@@ -983,64 +1059,6 @@ export const WaveformView = ({
         </div>
       </div>
 
-      {/* Event markers log */}
-      <div style={{
-        maxHeight: 160,
-        overflowY: 'auto',
-        border: '1px solid rgba(94,88,112,0.3)',
-        borderRadius: 10,
-        background: 'rgba(18,14,22,0.8)',
-        padding: '10px 14px',
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 13, color: 'rgba(220,195,90,0.9)' }}>
-            {T(lang, 'signalMarkers')}
-          </h3>
-          <button
-            onClick={() => { markersRef.current = []; lappedMarkersRef.current = new Set(); setMarkers([]); }}
-            style={{
-              background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.25)',
-              color: 'rgba(200,210,230,0.7)',
-              borderRadius: 4, cursor: 'pointer',
-              fontSize: 11, padding: '3px 8px',
-            }}
-          >
-            {T(lang, 'signalClearMarkers')}
-          </button>
-        </div>
-        {markers.length === 0 ? (
-          <div style={{ color: 'rgba(120,105,140,0.5)', fontSize: 12 }}>
-            {T(lang, 'signalMarkerHint')}
-          </div>
-        ) : (
-          <table style={{ width: '100%', fontSize: 12, textAlign: 'left', borderCollapse: 'collapse' }}>
-            <tbody>
-              {markers.map(m => (
-                <tr key={m.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                  <td style={{ padding: '5px 0', color: 'rgba(220,195,90,0.9)', width: 50 }}>{m.label}</td>
-                  <td style={{ padding: '5px 0', color: 'rgba(190,178,208,0.8)' }}>{formatTime(m.time)}</td>
-                  <td style={{ padding: '5px 0', textAlign: 'right' }}>
-                    <button
-                      onClick={() => {
-                        markersRef.current = markersRef.current.filter(x => x.id !== m.id);
-                        setMarkers(markersRef.current);
-                      }}
-                      style={{
-                        background: 'transparent', border: 'none',
-                        color: 'rgba(248,81,73,0.7)', cursor: 'pointer', padding: '0 4px',
-                      }}
-                    >
-                      [×]
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
     </div>
   );
 };

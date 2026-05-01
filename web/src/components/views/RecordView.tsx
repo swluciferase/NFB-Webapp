@@ -33,8 +33,8 @@ export interface RecordViewProps {
   filterDesc: string;
   notchDesc: string;
   startTime: Date | null;
-  onEventMarker: (marker: { id: string; time: number; label: string }) => void;
-  eventMarkers: { id: string; time: number; label: string }[];
+  onEventMarker: (marker: { id: string; time: number; label: string; kind?: 'software' | 'hardware'; wallclock?: number }) => void;
+  eventMarkers: { id: string; time: number; label: string; kind?: 'software' | 'hardware' }[];
   // Quality monitor props
   qualityConfig: QualityConfig;
   onQualityConfigChange: (config: QualityConfig) => void;
@@ -224,6 +224,61 @@ export const RecordView: FC<RecordViewProps> = ({
     return () => { ch.close(); rppgChannelRef.current = null; };
   }, []);
 
+  // ── THEMynd event-marker receiver ───────────────────────────────────────
+  // Accepts markers from THEMynd via (a) same-origin BroadcastChannel and
+  // (b) cross-origin postMessage (when THEMynd is iframed or opened via window.open).
+  useEffect(() => {
+    const handleMarker = (data: {
+      source?: string;
+      id?: number;
+      event?: string;
+      taskId?: number;
+      trialIdx?: number;
+      rt?: number;
+      correct?: boolean;
+      wallclock?: number;
+    }) => {
+      if (!data || data.source !== 'themynd') return;
+      const parts = [`#${data.id ?? '?'}`, data.event ?? '?', `task=${data.taskId ?? '?'}`];
+      if (data.trialIdx != null) parts.push(`trial=${data.trialIdx}`);
+      if (data.rt != null) parts.push(`rt=${data.rt}ms`);
+      if (data.correct != null) parts.push(data.correct ? '✓' : '✗');
+      const fullLabel = parts.join(' · ');
+      const wallclock = data.wallclock ?? Date.now();
+      // (1) Add to the right-side marker list
+      onEventMarker({
+        id: `themynd-${data.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        time: wallclock,
+        label: fullLabel,
+        wallclock,
+      });
+      // (2) Draw a vertical marker on the waveform canvas (short label to fit)
+      const shortLabel = `#${data.id ?? '?'}`;
+      window.dispatchEvent(new CustomEvent('themynd-marker-visual', {
+        detail: { label: shortLabel, fullLabel, wallclock },
+      }));
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('sigmacog-markers');
+      bc.onmessage = (ev) => handleMarker(ev.data);
+    } catch {
+      /* some browsers may not support BroadcastChannel */
+    }
+
+    const onPostMsg = (ev: MessageEvent) => {
+      // Accept from any origin — THEMynd tags messages with source='themynd'
+      handleMarker(ev.data);
+    };
+    window.addEventListener('message', onPostMsg);
+
+    return () => {
+      if (bc) bc.close();
+      window.removeEventListener('message', onPostMsg);
+    };
+  }, [onEventMarker]);
+
   useEffect(() => {
     if (isRecording) {
       timerRef.current = setInterval(() => {
@@ -398,7 +453,7 @@ export const RecordView: FC<RecordViewProps> = ({
     const id = Math.random().toString(36).substring(2, 9);
     const time = Date.now();
     const label = `M${eventMarkers.length + 1}`;
-    onEventMarker({ id, time, label });
+    onEventMarker({ id, time, label, wallclock: time });
   };
 
 
@@ -940,19 +995,25 @@ export const RecordView: FC<RecordViewProps> = ({
           {eventMarkers.length === 0 ? (
             <div style={{ fontSize: '.58rem', color: 'var(--dim)', padding: '.3rem 0' }}>—</div>
           ) : (
-            eventMarkers.map((m, i) => (
-              <div key={m.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '.26rem .38rem', borderBottom: '1px solid rgba(178,168,198,.06)',
-                fontSize: '.64rem',
-              }}>
-                <span style={{ color: 'var(--mauve)', fontSize: '.6rem', flexShrink: 0 }}>#{i + 1}</span>
-                <span style={{ color: 'var(--cream)', flex: 1, margin: '0 .35rem' }}>{m.label}</span>
-                <span style={{ color: 'var(--text)', fontSize: '.56rem' }}>
-                  {new Date(m.time).toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </span>
-              </div>
-            ))
+            eventMarkers.map((m, i) => {
+              const isHw = m.kind === 'hardware';
+              return (
+                <div key={m.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '.26rem .38rem', borderBottom: '1px solid rgba(178,168,198,.06)',
+                  fontSize: '.64rem',
+                }}>
+                  <span style={{ color: 'var(--mauve)', fontSize: '.6rem', flexShrink: 0 }}>#{i + 1}</span>
+                  <span style={{
+                    color: isHw ? 'rgba(102,187,106,0.95)' : 'var(--cream)',
+                    flex: 1, margin: '0 .35rem',
+                  }}>{m.label}</span>
+                  <span style={{ color: 'var(--text)', fontSize: '.56rem' }}>
+                    {new Date(m.time).toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </div>
+              );
+            })
           )}
         </div>
       </div>

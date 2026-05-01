@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:wasm": "cd ../crate && wasm-pack build --target web --release --out-dir ../web/src/pkg",
+    "encrypt:wasm": "node ../scripts/encrypt-wasm.mjs src/pkg/steeg_wasm_bg.wasm src/pkg/steeg_wasm_bg.wasm",
+    "build:full": "bun run build:wasm && WASM_ENC_KEY=c065d7cb560e545ec87825b6049d6f0ff8bd31a7794caaf1b872340061b8f7eb bun run encrypt:wasm && bun run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },

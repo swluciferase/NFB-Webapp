@@ -203,6 +203,20 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-disconnect on tab close / page hide (Web Serial doesn't auto-release in modern Chrome)
+  useEffect(() => {
+    const handler = () => {
+      void serialService.disconnect();
+      void ftdiUsbService.disconnect();
+    };
+    window.addEventListener('pagehide', handler);
+    window.addEventListener('beforeunload', handler);
+    return () => {
+      window.removeEventListener('pagehide', handler);
+      window.removeEventListener('beforeunload', handler);
+    };
+  }, []);
+
   // Recreate parser after WASM trap (poisoned WasmRefCell)
   const handleParserError = useCallback(() => {
     if (!wasmService.isInitialized) return;

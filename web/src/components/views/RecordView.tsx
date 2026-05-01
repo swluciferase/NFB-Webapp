@@ -995,7 +995,8 @@ export const RecordView: FC<RecordViewProps> = ({
           {eventMarkers.length === 0 ? (
             <div style={{ fontSize: '.58rem', color: 'var(--dim)', padding: '.3rem 0' }}>—</div>
           ) : (
-            eventMarkers.map((m, i) => {
+            eventMarkers.slice().reverse().map((m, displayIdx) => {
+              const i = eventMarkers.length - 1 - displayIdx;
               const isHw = m.kind === 'hardware';
               return (
                 <div key={m.id} style={{

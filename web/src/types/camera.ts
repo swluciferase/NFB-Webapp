@@ -63,7 +63,7 @@ export interface VideoSidecar {
 export interface SessionMeta {
   schema_version: '1.0';
   session_id: string;
-  app: 'sgimacog-web';
+  app: 'soramynd-nfb';
   app_version: string;
   created_at_iso: string;
   epoch_origin_ms: number;

@@ -919,7 +919,7 @@ export const RecordView: FC<RecordViewProps> = ({
               disabled={!isConnected}
               style={{
                 gridColumn: '1 / -1',
-                padding: '.7rem 0', border: 'none', borderRadius: 1,
+                padding: '.7rem 0', borderRadius: 1,
                 background: isConnected ? 'rgba(152,136,168,.15)' : 'rgba(60,80,100,.2)',
                 color: isConnected ? 'var(--cream)' : 'var(--muted)',
                 border: `1px solid ${isConnected ? 'rgba(152,136,168,.55)' : 'var(--border)'}`,

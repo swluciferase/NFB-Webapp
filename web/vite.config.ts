@@ -4,7 +4,7 @@ import wasm from 'vite-plugin-wasm'
 import obfuscatorPlugin from 'vite-plugin-javascript-obfuscator'
 import { resolve } from 'path'
 
-const APP_VERSION = '1.5.0'
+const APP_VERSION = '1.5.1'
 // v1.4.7 — fix: HistCanvas (EEG #1–5 history bars) collapsed to an empty
 //   strip when the history was negative (Z-Score mode). The old `max =
 //   max(history, threshold*1.1, 1)` clamped the y-scale to ≥1 and used

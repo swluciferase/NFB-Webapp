@@ -573,14 +573,15 @@ function App() {
       <div className="main-layout">
 
         {/* ── CI page: Col A (connect+impedance) + Col B+C (record split) ── */}
-        {activePage === 'ci' && (
-          <div style={{
-            display: 'flex',
-            flex: 1,
-            gap: '1px',
-            background: 'var(--border)',
-            overflow: 'hidden',
-          }}>
+        {/* Always mounted (display:none toggle) so RecordView's BroadcastChannel
+            listener for sigmacog-markers stays alive on every page. */}
+        <div style={{
+          display: activePage === 'ci' ? 'flex' : 'none',
+          flex: 1,
+          gap: '1px',
+          background: 'var(--border)',
+          overflow: 'hidden',
+        }}>
             {/* Col A: Connect + Impedance (grows) + Instructions (pinned bottom) */}
             <div style={{
               flex: 1,
@@ -684,12 +685,12 @@ function App() {
               shouldAutoStop={shouldAutoStop}
               cam={cam}
             />
-          </div>
-        )}
+        </div>
 
         {/* ── Signal+FFT page ── */}
-        {activePage === 'signal' && (
-          <div style={{ display: 'flex', flex: 1, gap: '1px', background: 'var(--border)', overflow: 'hidden' }}>
+        {/* Always mounted (display:none toggle) so WaveformView's marker
+            listeners stay alive and markersRef accumulates across page switches. */}
+        <div style={{ display: activePage === 'signal' ? 'flex' : 'none', flex: 1, gap: '1px', background: 'var(--border)', overflow: 'hidden' }}>
             <div style={{ flex: 2, minWidth: 0, overflow: 'hidden', background: 'var(--bg)' }}>
               <WaveformView
                 packets={latestPackets}
@@ -710,8 +711,7 @@ function App() {
                 lang={lang}
               />
             </div>
-          </div>
-        )}
+        </div>
 
         {/* ── Training page (always mounted) ── */}
         <div style={{
